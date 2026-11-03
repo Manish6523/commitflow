@@ -1,0 +1,266 @@
+{
+  "name": "commitflow",
+  "displayName": "CommitFlow",
+  "description": "Visual Git Commit Explorer, Repository Manager, Diff Inspector & Analytics for VS Code",
+  "version": "0.1.0",
+  "publisher": "commitflow",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/commitflow/commitflow"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "commit",
+    "history",
+    "diff",
+    "graph",
+    "analytics",
+    "repository",
+    "branch"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "commitflow-activitybar",
+          "title": "CommitFlow",
+          "icon": "media/activitybar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "commitflow-activitybar": [
+        {
+          "id": "commitflow.sidebar",
+          "name": "CommitFlow Explorer",
+          "type": "tree"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "commitflow.openDashboard",
+        "title": "CommitFlow: Open Commit Dashboard",
+        "category": "CommitFlow",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "commitflow.refresh",
+        "title": "CommitFlow: Refresh Repository",
+        "category": "CommitFlow",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "commitflow.search",
+        "title": "CommitFlow: Search Commits",
+        "category": "CommitFlow",
+        "icon": "$(search)"
+      },
+      {
+        "command": "commitflow.clearFilters",
+        "title": "CommitFlow: Clear All Filters",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.openCommit",
+        "title": "CommitFlow: Open Specific Commit",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.compareCommits",
+        "title": "CommitFlow: Compare Commits",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.openFileHistory",
+        "title": "CommitFlow: Open File History",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.viewBranches",
+        "title": "CommitFlow: View Branches & Tags",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.viewAnalytics",
+        "title": "CommitFlow: View Analytics & Insights",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.checkoutCommit",
+        "title": "CommitFlow: Checkout Commit",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.cherryPick",
+        "title": "CommitFlow: Cherry-Pick Commit",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.revertCommit",
+        "title": "CommitFlow: Revert Commit",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.createBranch",
+        "title": "CommitFlow: Create Branch from Commit",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.createTag",
+        "title": "CommitFlow: Create Tag from Commit",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.openSettings",
+        "title": "CommitFlow: Open Settings",
+        "category": "CommitFlow"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "commitflow.openDashboard",
+          "when": "view == commitflow.sidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "commitflow.refresh",
+          "when": "view == commitflow.sidebar",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "commitflow.openFileHistory",
+          "group": "navigation",
+          "when": "resourceScheme == file"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "commitflow.openDashboard"
+        },
+        {
+          "command": "commitflow.refresh"
+        },
+        {
+          "command": "commitflow.search"
+        },
+        {
+          "command": "commitflow.clearFilters"
+        },
+        {
+          "command": "commitflow.openCommit"
+        },
+        {
+          "command": "commitflow.compareCommits"
+        },
+        {
+          "command": "commitflow.openFileHistory"
+        },
+        {
+          "command": "commitflow.viewBranches"
+        },
+        {
+          "command": "commitflow.viewAnalytics"
+        },
+        {
+          "command": "commitflow.checkoutCommit"
+        },
+        {
+          "command": "commitflow.cherryPick"
+        },
+        {
+          "command": "commitflow.revertCommit"
+        },
+        {
+          "command": "commitflow.createBranch"
+        },
+        {
+          "command": "commitflow.createTag"
+        },
+        {
+          "command": "commitflow.openSettings"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CommitFlow",
+      "properties": {
+        "commitflow.pageSize": {
+          "type": "number",
+          "default": 30,
+          "description": "Number of commits per page."
+        },
+        "commitflow.defaultViewMode": {
+          "type": "string",
+          "enum": [
+            "grid",
+            "list",
+            "timeline",
+            "graph",
+            "analytics"
+          ],
+          "default": "grid",
+          "description": "Default view mode for the CommitFlow dashboard."
+        },
+        "commitflow.dateFormat": {
+          "type": "string",
+          "enum": [
+            "relative",
+            "local",
+            "iso"
+          ],
+          "default": "relative",
+          "description": "Default display format for commit timestamps."
+        },
+        "commitflow.enableAI": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable optional AI-powered commit explanations and smart search. Disabled by default."
+        },
+        "commitflow.aiProvider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "anthropic",
+            "gemini",
+            "custom"
+          ],
+          "default": "openai",
+          "description": "Configured AI provider for commit intelligence."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "compile": "tsc -p ./ && node esbuild.js",
+    "watch": "tsc -watch -p ./",
+    "build:ext": "node esbuild.js --production",
+    "build:webview": "cd webview-ui && npm run build",
+    "build": "node esbuild.js --production && cd webview-ui && npm run build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.3.1"
+  }
+}
