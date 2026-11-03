@@ -35,8 +35,9 @@ export class CommitFlowPanel {
         enableScripts: true,
         retainContextWhenHidden: true,
         localResourceRoots: [
+          extensionUri,
           vscode.Uri.joinPath(extensionUri, 'dist'),
-          vscode.Uri.joinPath(extensionUri, 'dist/webview'),
+          vscode.Uri.joinPath(extensionUri, 'dist', 'webview'),
           vscode.Uri.joinPath(extensionUri, 'media'),
         ],
       }
@@ -95,14 +96,19 @@ export class CommitFlowPanel {
     const indexHtmlPath = path.join(distPath, 'index.html');
 
     if (fs.existsSync(indexHtmlPath)) {
-      // In production / built mode, read the Vite output index.html and inject webview URIs
       let html = fs.readFileSync(indexHtmlPath, 'utf8');
 
-      // Replace asset paths with vscode-resource URIs
-      html = html.replace(/(href|src)="\/(assets\/[^"]+)"/g, (_match, attr, assetPath) => {
+      // Replace asset paths (matching /assets/..., ./assets/..., or assets/...) with webview URIs
+      html = html.replace(/(href|src)="(\.\/|\/)?(assets\/[^"]+)"/g, (_match, attr, _prefix, assetPath) => {
         const uri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', assetPath));
         return `${attr}="${uri}"`;
       });
+
+      // Add nonce to script tags
+      html = html.replace(/<script /g, `<script nonce="${nonce}" `);
+
+      // Remove crossorigin attribute if present to avoid CORS restriction on vscode-resource
+      html = html.replace(/crossorigin/g, '');
 
       // Inject strict CSP
       html = html.replace(
@@ -112,7 +118,6 @@ export class CommitFlowPanel {
 
       this.panel.webview.html = html;
     } else {
-      // Fallback for development if bundle not yet generated
       this.panel.webview.html = `
         <!DOCTYPE html>
         <html>
@@ -126,7 +131,7 @@ export class CommitFlowPanel {
         <body>
           <div>
             <h2>CommitFlow Webview is building...</h2>
-            <p>Please wait or run npm run build in webview-ui.</p>
+            <p>Please run npm run build in the project root.</p>
           </div>
         </body>
         </html>
@@ -143,4 +148,3 @@ export class CommitFlowPanel {
     }
   }
 }
-

@@ -8,12 +8,11 @@ export class Security {
   public static getCSP(webviewCspSource: string, nonce: string): string {
     return [
       `default-src 'none'`,
-      `img-src ${webviewCspSource} https: data:`,
-      `script-src 'nonce-${nonce}'`,
+      `img-src ${webviewCspSource} https: data: blob:`,
+      `script-src ${webviewCspSource} 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline'`,
       `style-src ${webviewCspSource} 'unsafe-inline'`,
-      `font-src ${webviewCspSource}`,
-      `connect-src ${webviewCspSource} https:`,
+      `font-src ${webviewCspSource} https: data:`,
+      `connect-src ${webviewCspSource} https: data: blob:`,
     ].join('; ');
   }
 }
-
