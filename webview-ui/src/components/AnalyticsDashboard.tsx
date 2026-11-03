@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useCommitStore } from '../stores/useCommitStore';
 import {
   BarChart2,
@@ -22,6 +22,58 @@ import {
 export const AnalyticsDashboard: React.FC = () => {
   const { analytics, loadingAnalytics, setFilters, setViewMode } = useCommitStore();
 
+  const LEVEL_COLORS = [
+    'bg-[#1e293b]/70 border-[#334155]/40', // 0
+    'bg-emerald-900/80 border-emerald-700/50', // 1
+    'bg-emerald-700 border-emerald-500/60', // 2
+    'bg-emerald-500 border-emerald-400', // 3
+    'bg-emerald-300 border-white', // 4
+  ];
+
+  const handleHeatmapDateClick = (date: string) => {
+    setFilters({ since: date, until: date });
+    setViewMode('grid');
+  };
+
+  // Group 365 days into 52-53 weekly columns of 7 days (Sunday - Saturday)
+  const heatmapGrid = useMemo(() => {
+    if (!analytics?.activityHeatmap) return { weeks: [], monthLabels: [] };
+
+    const items = analytics.activityHeatmap;
+    const weeks: { date: string; count: number; level: number; dayOfWeek: number }[][] = [];
+    const monthLabels: { label: string; colIndex: number }[] = [];
+
+    let currentWeek: { date: string; count: number; level: number; dayOfWeek: number }[] = [];
+    let lastMonth = '';
+
+    items.forEach((item) => {
+      const d = new Date(item.date);
+      const dayOfWeek = d.getDay(); // 0 is Sunday
+      const monthName = d.toLocaleDateString(undefined, { month: 'short' });
+
+      if (dayOfWeek === 0 && currentWeek.length > 0) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+
+      if (monthName !== lastMonth) {
+        monthLabels.push({ label: monthName, colIndex: weeks.length });
+        lastMonth = monthName;
+      }
+
+      currentWeek.push({
+        ...item,
+        dayOfWeek,
+      });
+    });
+
+    if (currentWeek.length > 0) {
+      weeks.push(currentWeek);
+    }
+
+    return { weeks, monthLabels };
+  }, [analytics?.activityHeatmap]);
+
   if (loadingAnalytics || !analytics) {
     return (
       <div className="flex flex-col items-center justify-center h-full py-16 text-gray-400 gap-2">
@@ -38,24 +90,10 @@ export const AnalyticsDashboard: React.FC = () => {
     dailyActivity,
     contributorStats,
     topFiles,
-    activityHeatmap,
   } = analytics;
 
-  const handleHeatmapDateClick = (date: string) => {
-    setFilters({ since: date, until: date });
-    setViewMode('grid');
-  };
-
-  const LEVEL_COLORS = [
-    'bg-vscode-input/50',
-    'bg-emerald-900/60',
-    'bg-emerald-700/80',
-    'bg-emerald-500',
-    'bg-emerald-300',
-  ];
-
   return (
-    <div className="flex flex-col h-full overflow-y-auto p-4 max-w-6xl mx-auto w-full space-y-6">
+    <div className="flex flex-col h-full overflow-y-auto p-4 max-w-6xl mx-auto w-full space-y-6 select-none">
       {/* Overview Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/50 flex items-center justify-between shadow-sm">
@@ -107,35 +145,77 @@ export const AnalyticsDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* 52-Week GitHub-style Activity Heatmap */}
+      {/* 52-Week True GitHub-style Activity Heatmap (7 Rows x 52 Columns) */}
       <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/40 shadow-sm flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h4 className="font-semibold text-xs text-gray-200 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-emerald-400" />
             Commit Activity Heatmap (Last 365 Days)
           </h4>
-          <span className="text-[11px] text-gray-400">Click a cell to filter commits</span>
+          <span className="text-[11px] text-gray-400">Click a cell to filter commits for that day</span>
         </div>
 
         <div className="overflow-x-auto pb-2">
-          <div className="flex gap-1 min-w-[700px] justify-start flex-wrap">
-            {activityHeatmap.map((item) => (
-              <button
-                key={item.date}
-                onClick={() => handleHeatmapDateClick(item.date)}
-                title={`${item.date}: ${item.count} commit${item.count === 1 ? '' : 's'}`}
-                className={`w-3 h-3 rounded-sm transition hover:ring-1 hover:ring-white ${
-                  LEVEL_COLORS[item.level]
-                }`}
-              />
-            ))}
+          <div className="min-w-[760px] flex flex-col gap-1">
+            {/* Month Labels */}
+            <div className="flex pl-8 text-[10px] text-gray-400 font-sans h-4 relative">
+              {heatmapGrid.monthLabels.map((m, idx) => (
+                <span
+                  key={idx}
+                  style={{ left: `${m.colIndex * 14 + 32}px` }}
+                  className="absolute font-medium"
+                >
+                  {m.label}
+                </span>
+              ))}
+            </div>
+
+            {/* Grid with Weekday Labels on the left and 7 rows */}
+            <div className="flex items-start gap-1.5">
+              {/* Day Labels */}
+              <div className="flex flex-col gap-1 text-[9px] text-gray-500 font-mono pr-1 select-none">
+                <span className="h-3 leading-3">Sun</span>
+                <span className="h-3 leading-3">Mon</span>
+                <span className="h-3 leading-3">Tue</span>
+                <span className="h-3 leading-3">Wed</span>
+                <span className="h-3 leading-3">Thu</span>
+                <span className="h-3 leading-3">Fri</span>
+                <span className="h-3 leading-3">Sat</span>
+              </div>
+
+              {/* Weekly Columns */}
+              <div className="flex gap-1 flex-1">
+                {heatmapGrid.weeks.map((week, wIdx) => (
+                  <div key={wIdx} className="flex flex-col gap-1">
+                    {/* Render days 0 through 6 */}
+                    {[0, 1, 2, 3, 4, 5, 6].map((dayNum) => {
+                      const day = week.find((d) => d.dayOfWeek === dayNum);
+                      if (!day) {
+                        return <div key={dayNum} className="w-3 h-3 rounded-sm opacity-0" />;
+                      }
+                      return (
+                        <button
+                          key={day.date}
+                          onClick={() => handleHeatmapDateClick(day.date)}
+                          title={`${day.date}: ${day.count} commit${day.count === 1 ? '' : 's'}`}
+                          className={`w-3 h-3 rounded-sm border transition hover:scale-125 hover:z-20 ${
+                            LEVEL_COLORS[day.level]
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* Legend */}
         <div className="flex items-center justify-end gap-1.5 text-[10px] text-gray-400 pt-1">
           <span>Less</span>
           {LEVEL_COLORS.map((c, i) => (
-            <div key={i} className={`w-2.5 h-2.5 rounded-sm ${c}`} />
+            <div key={i} className={`w-3 h-3 rounded-sm border ${c}`} />
           ))}
           <span>More</span>
         </div>
@@ -250,4 +330,3 @@ export const AnalyticsDashboard: React.FC = () => {
     </div>
   );
 };
-

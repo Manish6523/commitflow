@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCommitStore } from '../stores/useCommitStore';
 import {
   GitCompare,
@@ -9,6 +9,7 @@ import {
   Search,
 } from 'lucide-react';
 import { DiffViewer } from './DiffViewer';
+import { extractFileDiff } from '../utils/diff';
 import { vscode } from '../vscode';
 
 export const CommitCompareView: React.FC = () => {
@@ -19,6 +20,7 @@ export const CommitCompareView: React.FC = () => {
 
   const handleRunCompare = () => {
     if (baseInput.trim() && targetInput.trim()) {
+      setSelectedFile(null);
       compareCommits(baseInput.trim(), targetInput.trim());
     }
   };
@@ -32,10 +34,22 @@ export const CommitCompareView: React.FC = () => {
     });
   };
 
+  const toggleFile = (path: string) => {
+    setSelectedFile((prev) => (prev === path ? null : path));
+  };
+
+  const activeDiff = useMemo(() => {
+    if (!compareResult?.diff) return '';
+    if (selectedFile) {
+      return extractFileDiff(compareResult.diff, selectedFile);
+    }
+    return compareResult.diff;
+  }, [compareResult?.diff, selectedFile]);
+
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-vscode-bg p-4 max-w-6xl mx-auto w-full">
+    <div className="flex flex-col h-full overflow-hidden bg-vscode-bg p-4 max-w-6xl mx-auto w-full select-none">
       {/* Header and Compare Input Form */}
-      <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/60 flex flex-col gap-3">
+      <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/60 flex flex-col gap-3 shrink-0">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-sm text-gray-100 flex items-center gap-2">
             <GitCompare className="w-4 h-4 text-blue-400" />
@@ -89,6 +103,7 @@ export const CommitCompareView: React.FC = () => {
               onClick={() => {
                 setBaseInput(commits[1].hash);
                 setTargetInput(commits[0].hash);
+                setSelectedFile(null);
                 compareCommits(commits[1].hash, commits[0].hash);
               }}
               className="text-blue-400 hover:underline"
@@ -100,6 +115,7 @@ export const CommitCompareView: React.FC = () => {
               onClick={() => {
                 setBaseInput('HEAD~1');
                 setTargetInput('HEAD');
+                setSelectedFile(null);
                 compareCommits('HEAD~1', 'HEAD');
               }}
               className="text-blue-400 hover:underline"
@@ -116,9 +132,23 @@ export const CommitCompareView: React.FC = () => {
           {/* Changed Files Sidebar */}
           <div className="w-full md:w-80 flex flex-col rounded-xl border border-vscode-border bg-vscode-sidebar/40 overflow-hidden shrink-0">
             <div className="p-3 border-b border-vscode-border bg-vscode-sidebar/80 flex items-center justify-between">
-              <span className="font-semibold text-xs text-gray-200">
-                Changed Files ({compareResult.files.length})
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-xs text-gray-200">
+                  Files ({compareResult.files.length})
+                </span>
+                <button
+                  onClick={() => setSelectedFile(null)}
+                  className={`px-2 py-0.5 rounded text-[11px] transition ${
+                    selectedFile === null
+                      ? 'bg-blue-600 text-white font-medium shadow-sm'
+                      : 'text-gray-400 hover:text-white hover:bg-vscode-hover'
+                  }`}
+                  title="Show all files combined diff"
+                >
+                  All
+                </button>
+              </div>
+
               <div className="flex items-center gap-2 font-mono text-xs">
                 <span className="text-emerald-400 flex items-center">
                   <Plus className="w-3 h-3" />
@@ -132,62 +162,78 @@ export const CommitCompareView: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {compareResult.files.map((file) => (
-                <div
-                  key={file.path}
-                  onClick={() => setSelectedFile(file.path)}
-                  className={`p-2 rounded-lg text-xs font-mono flex items-center justify-between cursor-pointer transition ${
-                    selectedFile === file.path
-                      ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
-                      : 'hover:bg-vscode-hover text-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <span
-                      className={`text-[10px] font-bold px-1 rounded ${
-                        file.status === 'A'
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : file.status === 'D'
-                          ? 'bg-rose-500/20 text-rose-400'
-                          : file.status === 'R'
-                          ? 'bg-purple-500/20 text-purple-400'
-                          : 'bg-blue-500/20 text-blue-400'
-                      }`}
-                    >
-                      {file.status}
-                    </span>
-                    <span className="truncate">{file.path}</span>
-                  </div>
+              {compareResult.files.map((file) => {
+                const isSelected = selectedFile === file.path;
+                return (
+                  <div
+                    key={file.path}
+                    onClick={() => toggleFile(file.path)}
+                    className={`p-2 rounded-lg text-xs font-mono flex items-center justify-between cursor-pointer transition ${
+                      isSelected
+                        ? 'bg-blue-600/25 text-blue-300 border border-blue-500/50 shadow-sm'
+                        : 'hover:bg-vscode-hover text-gray-300 border border-transparent'
+                    }`}
+                    title={isSelected ? 'Click to show all files' : `Filter diff to ${file.path}`}
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span
+                        className={`text-[10px] font-bold px-1 rounded ${
+                          file.status === 'A'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : file.status === 'D'
+                            ? 'bg-rose-500/20 text-rose-400'
+                            : file.status === 'R'
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : 'bg-blue-500/20 text-blue-400'
+                        }`}
+                      >
+                        {file.status}
+                      </span>
+                      <span className="truncate">{file.path}</span>
+                    </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-[10px] text-emerald-400">+{file.insertions}</span>
-                    <span className="text-[10px] text-rose-400">-{file.deletions}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenNativeDiff(file.path);
-                      }}
-                      className="p-0.5 rounded hover:bg-vscode-hover text-gray-400 hover:text-white"
-                      title="Open in VS Code Native Diff Editor"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[10px] text-emerald-400">+{file.insertions}</span>
+                      <span className="text-[10px] text-rose-400">-{file.deletions}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenNativeDiff(file.path);
+                        }}
+                        className="p-0.5 rounded hover:bg-vscode-hover text-gray-400 hover:text-white"
+                        title="Open in VS Code Native Diff Editor"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           {/* Diff Content View */}
           <div className="flex-1 flex flex-col rounded-xl border border-vscode-border bg-vscode-sidebar/30 overflow-hidden">
             <div className="p-3 border-b border-vscode-border bg-vscode-sidebar/80 flex items-center justify-between">
-              <span className="font-semibold text-xs text-gray-200 font-mono">
-                {selectedFile || 'Complete Comparison Diff'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-xs text-gray-200 font-mono truncate max-w-md">
+                  {selectedFile ? `File: ${selectedFile}` : 'Complete Comparison Diff (All Files)'}
+                </span>
+                {selectedFile && (
+                  <button
+                    onClick={() => setSelectedFile(null)}
+                    className="text-[11px] text-blue-400 hover:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20"
+                  >
+                    ✕ Show All Files
+                  </button>
+                )}
+              </div>
+
               {selectedFile && (
                 <button
                   onClick={() => handleOpenNativeDiff(selectedFile)}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition shadow-sm"
+                  title="Open VS Code native diff editor"
                 >
                   <span>Open in VS Code Diff</span>
                   <ExternalLink className="w-3 h-3" />
@@ -196,7 +242,7 @@ export const CommitCompareView: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-auto p-2">
-              <DiffViewer diff={compareResult.diff} />
+              <DiffViewer diff={activeDiff} fileName={selectedFile || undefined} />
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCommitStore } from '../stores/useCommitStore';
 import {
   X,
@@ -6,14 +6,15 @@ import {
   Check,
   GitMerge,
   ShieldCheck,
-  FileCode2,
   Sparkles,
   ExternalLink,
   GitCommit,
   User,
   AlertTriangle,
+  FileCode2,
 } from 'lucide-react';
 import { DiffViewer } from './DiffViewer';
+import { extractFileDiff } from '../utils/diff';
 import { vscode } from '../vscode';
 
 export const CommitInspectorModal: React.FC = () => {
@@ -28,8 +29,6 @@ export const CommitInspectorModal: React.FC = () => {
   const [copiedSha, setCopiedSha] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [loadingAi, setLoadingAi] = useState(false);
-
-  if (!selectedCommitDetails && !loadingDetails) return null;
 
   const commit = selectedCommitDetails;
 
@@ -73,8 +72,24 @@ export const CommitInspectorModal: React.FC = () => {
     }
   };
 
+  // Toggle file selection: clicking the selected file deselects it back to all files
+  const toggleFile = (path: string) => {
+    setSelectedFilePath((prev) => (prev === path ? null : path));
+  };
+
+  // Filter diff for selected file or show complete diff
+  const activeDiff = useMemo(() => {
+    if (!commit?.diff) return '';
+    if (selectedFilePath) {
+      return extractFileDiff(commit.diff, selectedFilePath);
+    }
+    return commit.diff;
+  }, [commit?.diff, selectedFilePath]);
+
+  if (!selectedCommitDetails && !loadingDetails) return null;
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-6">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-6 select-none">
       <div className="bg-vscode-bg border border-vscode-border rounded-2xl w-full max-w-5xl h-[90vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Modal Top Header */}
         <div className="px-5 py-3 border-b border-vscode-border bg-vscode-sidebar/90 flex items-center justify-between gap-4 shrink-0">
@@ -93,6 +108,7 @@ export const CommitInspectorModal: React.FC = () => {
                   <button
                     onClick={copySha}
                     className="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-bold"
+                    title="Click to copy full SHA"
                   >
                     {copiedSha ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                     <span>{commit.shortHash}</span>
@@ -124,6 +140,7 @@ export const CommitInspectorModal: React.FC = () => {
             <button
               onClick={() => selectCommit(null)}
               className="p-1.5 rounded-lg hover:bg-vscode-hover text-gray-400 hover:text-white transition"
+              title="Close Inspector"
             >
               <X className="w-5 h-5" />
             </button>
@@ -136,10 +153,10 @@ export const CommitInspectorModal: React.FC = () => {
             {/* Left Column: Metadata & File List */}
             <div className="w-full md:w-80 border-r border-vscode-border bg-vscode-sidebar/30 flex flex-col overflow-hidden shrink-0">
               {/* Commit Details Box */}
-              <div className="p-4 border-b border-vscode-border space-y-3 overflow-y-auto max-h-56">
+              <div className="p-4 border-b border-vscode-border space-y-3 overflow-y-auto max-h-52">
                 <div>
                   <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">
-                    Full Message
+                    Full Commit Message
                   </span>
                   <p className="text-xs text-gray-200 font-sans whitespace-pre-wrap leading-relaxed select-text">
                     {commit.subject}
@@ -160,7 +177,10 @@ export const CommitInspectorModal: React.FC = () => {
                       {commit.parentHashes.map((p) => (
                         <button
                           key={p}
-                          onClick={() => selectCommit(p)}
+                          onClick={() => {
+                            setSelectedFilePath(null);
+                            selectCommit(p);
+                          }}
                           className="font-mono text-blue-400 hover:underline"
                         >
                           {p.substring(0, 7)}
@@ -187,63 +207,81 @@ export const CommitInspectorModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Changed Files Header */}
-              <div className="px-4 py-2 border-b border-vscode-border bg-vscode-sidebar/80 flex items-center justify-between text-xs">
-                <span className="font-semibold text-gray-200">
-                  Files Changed ({commit.files?.length || commit.filesChanged})
-                </span>
+              {/* Changed Files Header with "All Files" Toggle */}
+              <div className="px-3 py-2 border-b border-vscode-border bg-vscode-sidebar/80 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-200">
+                    Files ({commit.files?.length || commit.filesChanged})
+                  </span>
+                  <button
+                    onClick={() => setSelectedFilePath(null)}
+                    className={`px-2 py-0.5 rounded text-[11px] transition ${
+                      selectedFilePath === null
+                        ? 'bg-blue-600 text-white font-medium shadow-sm'
+                        : 'text-gray-400 hover:text-white hover:bg-vscode-hover'
+                    }`}
+                    title="Show all files combined diff"
+                  >
+                    All
+                  </button>
+                </div>
+
                 <div className="flex items-center gap-2 font-mono text-[11px]">
                   <span className="text-emerald-400 font-medium">+{commit.insertions}</span>
                   <span className="text-rose-400 font-medium">-{commit.deletions}</span>
                 </div>
               </div>
 
-              {/* Files List */}
+              {/* Interactive Files List with Instant Toggle */}
               <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {commit.files && commit.files.length > 0 ? (
-                  commit.files.map((file) => (
-                    <div
-                      key={file.path}
-                      onClick={() => setSelectedFilePath(file.path)}
-                      className={`p-2 rounded-lg text-xs font-mono flex items-center justify-between cursor-pointer transition ${
-                        selectedFilePath === file.path
-                          ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
-                          : 'hover:bg-vscode-hover text-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <span
-                          className={`text-[10px] font-bold px-1 rounded ${
-                            file.status === 'A'
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : file.status === 'D'
-                              ? 'bg-rose-500/20 text-rose-400'
-                              : file.status === 'R'
-                              ? 'bg-purple-500/20 text-purple-400'
-                              : 'bg-blue-500/20 text-blue-400'
-                          }`}
-                        >
-                          {file.status}
-                        </span>
-                        <span className="truncate">{file.path}</span>
-                      </div>
+                  commit.files.map((file) => {
+                    const isSelected = selectedFilePath === file.path;
+                    return (
+                      <div
+                        key={file.path}
+                        onClick={() => toggleFile(file.path)}
+                        className={`p-2 rounded-lg text-xs font-mono flex items-center justify-between cursor-pointer transition ${
+                          isSelected
+                            ? 'bg-blue-600/25 text-blue-300 border border-blue-500/50 shadow-sm'
+                            : 'hover:bg-vscode-hover text-gray-300 border border-transparent'
+                        }`}
+                        title={isSelected ? 'Click to show all files' : `Filter diff to ${file.path}`}
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <span
+                            className={`text-[10px] font-bold px-1 rounded ${
+                              file.status === 'A'
+                                ? 'bg-emerald-500/20 text-emerald-400'
+                                : file.status === 'D'
+                                ? 'bg-rose-500/20 text-rose-400'
+                                : file.status === 'R'
+                                ? 'bg-purple-500/20 text-purple-400'
+                                : 'bg-blue-500/20 text-blue-400'
+                            }`}
+                          >
+                            {file.status}
+                          </span>
+                          <span className="truncate">{file.path}</span>
+                        </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[10px] text-emerald-400">+{file.insertions}</span>
-                        <span className="text-[10px] text-rose-400">-{file.deletions}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenEditor(file.path);
-                          }}
-                          className="p-1 rounded hover:bg-vscode-hover text-gray-400 hover:text-white"
-                          title="Open file in VS Code editor"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] text-emerald-400">+{file.insertions}</span>
+                          <span className="text-[10px] text-rose-400">-{file.deletions}</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditor(file.path);
+                            }}
+                            className="p-1 rounded hover:bg-vscode-hover text-gray-400 hover:text-white"
+                            title="Open file in VS Code editor"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="p-4 text-center text-xs text-gray-500">
                     No individual file modifications listed.
@@ -257,21 +295,34 @@ export const CommitInspectorModal: React.FC = () => {
               {activeTab === 'diff' ? (
                 <div className="flex-1 flex flex-col h-full overflow-hidden">
                   <div className="flex items-center justify-between pb-2 mb-2 border-b border-vscode-border">
-                    <span className="font-mono text-xs text-gray-300">
-                      {selectedFilePath ? `File: ${selectedFilePath}` : 'Full Commit Diff'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-gray-300 font-semibold truncate max-w-md">
+                        {selectedFilePath ? `File: ${selectedFilePath}` : 'Complete Commit Diff (All Files)'}
+                      </span>
+                      {selectedFilePath && (
+                        <button
+                          onClick={() => setSelectedFilePath(null)}
+                          className="text-[11px] text-blue-400 hover:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20"
+                        >
+                          ✕ Show All Files
+                        </button>
+                      )}
+                    </div>
+
                     {selectedFilePath && (
                       <button
                         onClick={() => handleOpenDiffEditor(selectedFilePath)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition shadow-sm"
+                        title="Open VS Code native diff editor"
                       >
                         <span>Open Native Diff</span>
                         <ExternalLink className="w-3 h-3" />
                       </button>
                     )}
                   </div>
+
                   <div className="flex-1 overflow-hidden">
-                    <DiffViewer diff={commit.diff} />
+                    <DiffViewer diff={activeDiff} fileName={selectedFilePath || undefined} />
                   </div>
                 </div>
               ) : (

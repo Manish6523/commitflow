@@ -45,7 +45,7 @@ describe('CommitService Parser', () => {
   it('should parse delimited commit records with parents and signature status', () => {
     const SEP = '\x1f';
     const REC_SEP = '\x1e';
-    const record = [
+    const record = REC_SEP + [
       'a82f91c1234567890abcdef1234567890abcdef12',
       'a82f91c',
       'tree123',
@@ -62,7 +62,7 @@ describe('CommitService Parser', () => {
       'G',
       'feat: implement authentication system',
       'Implemented JWT tokens and refresh handlers.\n 2 files changed, 45 insertions(+), 3 deletions(-)',
-    ].join(SEP) + REC_SEP;
+    ].join(SEP);
 
     const commits = CommitService.parseCommitsWithStats(record);
     expect(commits.length).toBe(1);

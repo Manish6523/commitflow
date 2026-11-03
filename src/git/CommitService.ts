@@ -4,12 +4,9 @@ import { CommitDetails, CommitFilterOptions, FileChange, FileStatus, GitCommit }
 const FIELD_SEP = '\x1f';
 const RECORD_SEP = '\x1e';
 
-// Format string containing delimited metadata fields
-// %H: hash, %h: shortHash, %T: treeHash, %P: parentHashes
-// %an: authorName, %ae: authorEmail, %aI: authorDateIso, %at: authorTimestamp
-// %cn: committerName, %ce: committerEmail, %cI: committerDateIso, %ct: committerTimestamp
-// %D: refNames, %G?: signatureStatus, %s: subject, %b: body
-const COMMIT_FORMAT = [
+// Delimited metadata format with RECORD_SEP at the BEGINNING of each record
+// so that any trailing --shortstat belongs to the preceding commit
+const COMMIT_FORMAT = RECORD_SEP + [
   '%H',
   '%h',
   '%T',
@@ -26,7 +23,7 @@ const COMMIT_FORMAT = [
   '%G?',
   '%s',
   '%b',
-].join(FIELD_SEP) + RECORD_SEP;
+].join(FIELD_SEP);
 
 export class CommitService {
   /**
@@ -88,11 +85,10 @@ export class CommitService {
       baseArgs.push(`--grep=${options.searchQuery.trim()}`, '-i');
     }
 
-    // First calculate total count bounded
+    // Calculate total count
     let totalCount = 0;
     try {
       const revListArgs = ['rev-list', '--count'];
-      // Filter out 'log' command and take revision/filter args
       for (let i = 1; i < baseArgs.length; i++) {
         const arg = baseArgs[i];
         if (arg === '--shortstat' || arg.startsWith('--format=')) continue;
@@ -129,7 +125,6 @@ export class CommitService {
         hasMore,
       };
     } catch (err: any) {
-      // Empty repo or error
       if (err.stderr?.includes('does not have any commits yet') || err.stderr?.includes('fatal: your current branch')) {
         return { commits: [], totalCount: 0, hasMore: false };
       }
@@ -147,16 +142,18 @@ export class CommitService {
     for (const record of rawRecords) {
       if (!record.trim()) continue;
 
-      // The record has the formatted commit fields, and might be followed by a shortstat line
       const parts = record.split(FIELD_SEP);
       if (parts.length < 15) continue;
 
-      const hash = parts[0].trim();
+      // Extract clean hexadecimal hash (SHA1 or SHA256)
+      const rawHash = parts[0].trim();
+      const hashMatch = rawHash.match(/[0-9a-fA-F]{7,64}/);
+      const hash = hashMatch ? hashMatch[0] : rawHash;
       if (!hash || hash.length < 4) continue;
 
       const shortHash = parts[1].trim();
       const treeHash = parts[2].trim();
-      const parentHashes = parts[3].trim() ? parts[3].trim().split(' ') : [];
+      const parentHashes = parts[3].trim() ? parts[3].trim().split(' ').filter(Boolean) : [];
       const authorName = parts[4].trim();
       const authorEmail = parts[5].trim();
       const authorDate = parts[6].trim();
@@ -168,7 +165,7 @@ export class CommitService {
       const refNamesRaw = parts[12].trim();
       const sigStatus = (parts[13].trim() || 'N') as GitCommit['signatureStatus'];
       const subject = parts[14].trim();
-      
+
       // Last part contains the body and any trailing shortstat text
       const bodyAndStats = parts.slice(15).join(FIELD_SEP);
       const { body, filesChanged, insertions, deletions } = this.extractShortStat(bodyAndStats);
@@ -249,11 +246,15 @@ export class CommitService {
 
     for (const line of lines) {
       const trimmed = line.trim();
-      const match = trimmed.match(/(\d+)\s+file[s]?\s+changed(?:,\s+(\d+)\s+insertion[s]?\(\+\))?(?:,\s+(\d+)\s+deletion[s]?\(-\))?/);
-      if (match) {
-        filesChanged = parseInt(match[1], 10) || 0;
-        insertions = parseInt(match[2] || '0', 10) || 0;
-        deletions = parseInt(match[3] || '0', 10) || 0;
+      if (trimmed.includes('file changed') || trimmed.includes('files changed')) {
+        const filesMatch = trimmed.match(/(\d+)\s+file/);
+        if (filesMatch) filesChanged = parseInt(filesMatch[1], 10) || 0;
+
+        const insMatch = trimmed.match(/(\d+)\s+insertion/);
+        if (insMatch) insertions = parseInt(insMatch[1], 10) || 0;
+
+        const delMatch = trimmed.match(/(\d+)\s+deletion/);
+        if (delMatch) deletions = parseInt(delMatch[1], 10) || 0;
       } else {
         bodyLines.push(line);
       }
@@ -271,20 +272,23 @@ export class CommitService {
    * Get full details for a commit, including changed files and full diff.
    */
   public static async getCommitDetails(repoRoot: string, hash: string): Promise<CommitDetails> {
+    const hashMatch = hash.trim().match(/[0-9a-fA-F]{7,64}/);
+    const cleanHash = hashMatch ? hashMatch[0] : hash.trim();
+
     // 1. Get commit metadata
     const formatRes = await GitProcess.exec(
-      ['show', hash, `--format=${COMMIT_FORMAT}`, '--no-patch'],
+      ['show', cleanHash, `--format=${COMMIT_FORMAT}`, '--no-patch'],
       { cwd: repoRoot }
     );
     const commits = this.parseCommitsWithStats(formatRes.stdout);
     if (commits.length === 0) {
-      throw new Error(`Commit ${hash} not found.`);
+      throw new Error(`Commit ${cleanHash} not found.`);
     }
     const baseCommit = commits[0];
 
     // 2. Get changed files list with numstat and raw status
     const numstatRes = await GitProcess.exec(
-      ['show', hash, '--numstat', '--name-status', '--format='],
+      ['show', cleanHash, '--numstat', '--name-status', '--format='],
       { cwd: repoRoot }
     );
     const files = this.parseNumstatAndStatus(numstatRes.stdout);
@@ -300,7 +304,7 @@ export class CommitService {
     // 3. Get full diff (bounded to avoid crashing on enormous diffs)
     let diff = '';
     try {
-      const diffRes = await GitProcess.exec(['show', hash, '--patch', '--format='], {
+      const diffRes = await GitProcess.exec(['show', cleanHash, '--patch', '--format='], {
         cwd: repoRoot,
         maxBuffer: 20 * 1024 * 1024,
       });
@@ -311,6 +315,7 @@ export class CommitService {
 
     return {
       ...baseCommit,
+      hash: cleanHash,
       filesChanged: files.length > 0 ? files.length : baseCommit.filesChanged,
       insertions: totalIns > 0 ? totalIns : baseCommit.insertions,
       deletions: totalDel > 0 ? totalDel : baseCommit.deletions,
@@ -401,12 +406,46 @@ export class CommitService {
    * Get diff for a specific file in a commit.
    */
   public static async getFileDiff(repoRoot: string, hash: string, filePath?: string): Promise<string> {
-    const args = ['show', hash, '--patch', '--format='];
+    const hashMatch = hash.trim().match(/[0-9a-fA-F]{7,64}/);
+    const cleanHash = hashMatch ? hashMatch[0] : hash.trim();
+
+    const args = ['show', cleanHash, '--patch', '--format='];
     if (filePath) {
       args.push('--', filePath);
     }
     const res = await GitProcess.exec(args, { cwd: repoRoot });
     return res.stdout;
   }
-}
 
+  /**
+   * Extract a specific file's patch from a combined git diff output.
+   */
+  public static extractFileDiff(fullDiff: string, targetPath: string): string {
+    if (!fullDiff || !targetPath) return fullDiff;
+
+    const lines = fullDiff.split('\n');
+    const result: string[] = [];
+    let capturing = false;
+    const target = targetPath.replace(/\\/g, '/');
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.startsWith('diff --git ')) {
+        const match = line.match(/^diff --git [a-z]\/(.+) [a-z]\/(.+)$/);
+        if (match) {
+          const pathA = match[1].trim();
+          const pathB = match[2].trim();
+          capturing = (pathA === target || pathB === target);
+        } else {
+          capturing = false;
+        }
+      }
+
+      if (capturing) {
+        result.push(line);
+      }
+    }
+
+    return result.length > 0 ? result.join('\n') : fullDiff;
+  }
+}
