@@ -57,3 +57,4 @@ npm run test
 - Never pass unescaped shell strings to `child_process.exec`. Always use `GitProcess.exec` with argument arrays.
 - Machine-readable Git formats (`%x1f`, `%x1e`, `--numstat`) must be used for parsing.
 - Destructive operations must require explicit user confirmation.
+

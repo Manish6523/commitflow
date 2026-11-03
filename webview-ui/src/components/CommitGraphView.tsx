@@ -264,3 +264,4 @@ export const CommitGraphView: React.FC<CommitGraphViewProps> = ({ commits }) => 
     </div>
   );
 };
+

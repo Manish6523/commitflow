@@ -448,3 +448,4 @@ export class MessageHandler {
     this.panel.webview.postMessage(msg);
   }
 }
+

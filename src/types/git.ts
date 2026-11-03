@@ -106,3 +106,4 @@ export interface ContributorStats {
   deletions: number;
   filesModified: number;
 }
+

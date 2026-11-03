@@ -57,3 +57,4 @@ export class StorageService {
     await this.workspaceState.update(StorageService.LAST_REPO_KEY, repoPath);
   }
 }
+

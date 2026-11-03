@@ -72,3 +72,4 @@ export class TagService {
     await GitProcess.exec(['tag', '-d', tagName], { cwd: repoRoot });
   }
 }
+

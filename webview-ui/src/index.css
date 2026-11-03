@@ -37,3 +37,4 @@ body {
 ::-webkit-scrollbar-thumb:active {
   background: var(--vscode-scrollbarSlider-activeBackground, rgba(191, 191, 191, 0.4));
 }
+

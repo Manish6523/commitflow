@@ -115,3 +115,4 @@ Customize CommitFlow in VS Code Settings (`Ctrl+,`):
 ## 📄 License
 
 MIT License. Built for modern software development teams.
+

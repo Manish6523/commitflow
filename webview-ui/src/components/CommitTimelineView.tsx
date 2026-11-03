@@ -96,3 +96,4 @@ export const CommitTimelineView: React.FC<CommitTimelineViewProps> = ({ commits 
     </div>
   );
 };
+

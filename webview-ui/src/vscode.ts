@@ -48,3 +48,4 @@ class VsCodeApi {
 }
 
 export const vscode = new VsCodeApi();
+

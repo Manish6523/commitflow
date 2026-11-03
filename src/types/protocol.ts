@@ -77,3 +77,4 @@ export type ExtensionToWebviewAction =
   | { type: 'ERROR'; message: string };
 
 export type ExtensionMessage = ExtensionToWebviewAction & { requestId?: string };
+

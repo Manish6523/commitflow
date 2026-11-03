@@ -82,3 +82,4 @@ describe('CommitService Parser', () => {
     expect(c.tags).toContain('v2.1.0');
   });
 });
+

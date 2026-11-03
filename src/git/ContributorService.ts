@@ -59,3 +59,4 @@ export class ContributorService {
     return Array.from(contributorMap.values()).sort((a, b) => b.commitCount - a.commitCount);
   }
 }
+

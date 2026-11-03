@@ -95,3 +95,4 @@ export class DiffService {
     await GitProcess.exec(args, { cwd: repoRoot });
   }
 }
+

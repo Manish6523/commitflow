@@ -39,3 +39,4 @@ All notable changes to the "commitflow" extension will be documented in this fil
   - Natural language search query translation.
   - Conventional commit release notes generator.
   - VS Code `SecretStorage` protection for credentials.
+

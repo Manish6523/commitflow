@@ -33,3 +33,4 @@ describe('SearchService', () => {
     expect(empty.freeText).toBe('');
   });
 });
+

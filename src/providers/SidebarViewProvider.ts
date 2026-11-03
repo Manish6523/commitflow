@@ -143,3 +143,4 @@ export class SidebarViewProvider implements vscode.TreeDataProvider<SidebarItem>
     return [];
   }
 }
+

@@ -128,3 +128,4 @@ export interface CommitComparisonResult {
   totalDeletions: number;
   diff: string;
 }
+
