@@ -1,7 +1,7 @@
 import { GitProcess } from './GitProcess';
 import { Branch } from '../types/git';
 
-const BRANCH_FORMAT = '%(refname)%(refname:short)%09%(upstream:short)%09%(objectname:short)%09%(contents:subject)%09%(committerdate:iso8601)%09%(HEAD)';
+const BRANCH_FORMAT = '%(refname)%09%(refname:short)%09%(upstream:short)%09%(objectname:short)%09%(contents:subject)%09%(committerdate:iso8601)%09%(HEAD)';
 
 export class BranchService {
   /**
@@ -43,31 +43,16 @@ export class BranchService {
 
     for (const line of lines) {
       const parts = line.split('\t');
-      if (parts.length < 5) continue;
+      if (parts.length < 6) continue;
 
-      const refAndName = parts[0].trim();
-      // refname: e.g. refs/heads/mainmain or similar, parse short name
-      const upstream = parts[1]?.trim() || undefined;
-      const lastCommitHash = parts[2]?.trim() || '';
-      const lastCommitSubject = parts[3]?.trim() || '';
-      const lastCommitDate = parts[4]?.trim() || '';
-      const headMark = parts[5]?.trim() || '';
+      const fullName = parts[0].trim();
+      const name = parts[1].trim();
+      const upstream = parts[2]?.trim() || undefined;
+      const lastCommitHash = parts[3]?.trim() || '';
+      const lastCommitSubject = parts[4]?.trim() || '';
+      const lastCommitDate = parts[5]?.trim() || '';
+      const headMark = parts[6]?.trim() || '';
       const isCurrent = headMark === '*';
-
-      // Parse branch name cleanly
-      let name = '';
-      let fullName = '';
-      if (isRemote) {
-        fullName = refAndName.startsWith('refs/remotes/') ? refAndName : `refs/remotes/${refAndName}`;
-        name = fullName.replace(/^refs\/remotes\//, '');
-      } else {
-        fullName = refAndName.startsWith('refs/heads/') ? refAndName : `refs/heads/${refAndName}`;
-        name = fullName.replace(/^refs\/heads\//, '');
-        // When using %(refname)%(refname:short), handle prefix
-        if (name.includes('refs/heads/')) {
-          name = name.split('refs/heads/').pop() || name;
-        }
-      }
 
       // Calculate ahead/behind if upstream exists
       let ahead = 0;
