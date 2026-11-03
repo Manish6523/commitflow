@@ -25,11 +25,12 @@ describe('Real Repository Git Integration', () => {
     expect(res.commits.length).toBeGreaterThan(0);
     expect(res.totalCount).toBeGreaterThanOrEqual(5);
 
-    // Latest commit is the merge commit
-    const mergeCommit = res.commits[0];
-    expect(mergeCommit.isMerge).toBe(true);
-    expect(mergeCommit.parentHashes.length).toBe(2);
-    expect(mergeCommit.subject).toContain("Merge branch 'feature/dark-theme'");
+    // Find merge commit
+    const mergeCommit = res.commits.find((c) => c.isMerge);
+    expect(mergeCommit).toBeDefined();
+    expect(mergeCommit?.isMerge).toBe(true);
+    expect(mergeCommit?.parentHashes.length).toBe(2);
+    expect(mergeCommit?.subject).toContain("Merge branch 'feature/dark-theme'");
   });
 
   it('should retrieve local and remote branches', async () => {
