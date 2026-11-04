@@ -2,7 +2,7 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
-## [Unreleased]
+## [0.2.0] - 2026-11-04
 
 ### Added
 
