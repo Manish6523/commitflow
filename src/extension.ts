@@ -3,6 +3,7 @@ import { StorageService } from './services/StorageService';
 import { AIService } from './services/AIService';
 import { CommitFlowPanel } from './providers/CommitFlowPanel';
 import { SidebarViewProvider } from './providers/SidebarViewProvider';
+import { REVISION_SCHEME, RevisionContentProvider } from './providers/RevisionContentProvider';
 
 let statusBarItem: vscode.StatusBarItem;
 
@@ -14,6 +15,13 @@ export function activate(context: vscode.ExtensionContext) {
   const sidebarProvider = new SidebarViewProvider(storageService);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('commitflow.sidebar', sidebarProvider)
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      REVISION_SCHEME,
+      new RevisionContentProvider()
+    )
   );
 
   // 2. Status Bar Item
@@ -50,7 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('commitflow.search', () => {
       const panel = openDashboard();
-      panel.panel.webview.postMessage({ type: 'FOCUS_SEARCH' });
+      panel.postToWebview({ type: 'FOCUS_SEARCH' });
     }),
 
     vscode.commands.registerCommand('commitflow.clearFilters', () => {
@@ -66,36 +74,33 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('commitflow.openCommit', (hash?: string) => {
       const panel = openDashboard();
       if (hash) {
-        panel.messageHandler.handleMessage({ type: 'GET_COMMIT_DETAILS', hash });
+        panel.postToWebview({ type: 'OPEN_COMMIT', hash });
       }
     }),
 
     vscode.commands.registerCommand('commitflow.compareCommits', () => {
       const panel = openDashboard();
-      panel.panel.webview.postMessage({ type: 'SWITCH_VIEW', view: 'compare' });
+      panel.postToWebview({ type: 'SWITCH_VIEW', view: 'compare' });
     }),
 
     vscode.commands.registerCommand('commitflow.openFileHistory', (uri?: vscode.Uri) => {
       const targetUri = uri || vscode.window.activeTextEditor?.document.uri;
-      if (!targetUri) {
-        vscode.window.showWarningMessage('No active file selected to view Git history.');
-        return;
-      }
       const panel = openDashboard();
-      panel.messageHandler.handleMessage({
-        type: 'GET_FILE_HISTORY',
-        filePath: targetUri.fsPath,
-      });
+      if (targetUri?.scheme === 'file') {
+        panel.postToWebview({ type: 'OPEN_FILE_HISTORY', filePath: targetUri.fsPath });
+      } else {
+        panel.postToWebview({ type: 'SWITCH_VIEW', view: 'fileHistory' });
+      }
     }),
 
     vscode.commands.registerCommand('commitflow.viewBranches', () => {
       const panel = openDashboard();
-      panel.panel.webview.postMessage({ type: 'SWITCH_VIEW', view: 'branches' });
+      panel.postToWebview({ type: 'SWITCH_VIEW', view: 'branches' });
     }),
 
     vscode.commands.registerCommand('commitflow.viewAnalytics', () => {
       const panel = openDashboard();
-      panel.panel.webview.postMessage({ type: 'SWITCH_VIEW', view: 'analytics' });
+      panel.postToWebview({ type: 'SWITCH_VIEW', view: 'analytics' });
     }),
 
     vscode.commands.registerCommand('commitflow.checkoutCommit', async (hash?: string) => {

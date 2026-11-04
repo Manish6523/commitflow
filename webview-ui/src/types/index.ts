@@ -86,7 +86,36 @@ export interface CommitFilterOptions {
   filePath?: string;
 }
 
-export type ViewMode = 'grid' | 'list' | 'timeline' | 'graph' | 'branches' | 'compare' | 'analytics' | 'settings';
+export type ViewMode = 'grid' | 'list' | 'timeline' | 'graph' | 'branches' | 'fileHistory' | 'compare' | 'analytics' | 'settings';
+
+export interface FileHistoryCommit {
+  hash: string;
+  shortHash: string;
+  author: GitAuthor;
+  subject: string;
+  status: FileStatus;
+  /** The file's path at this commit, which differs from today's after a rename. */
+  path: string;
+  oldPath?: string;
+  parentHash: string | null;
+  insertions: number;
+  deletions: number;
+  isBinary: boolean;
+}
+
+export interface FileContent {
+  content: string;
+  exists: boolean;
+  isBinary: boolean;
+  tooLarge: boolean;
+}
+
+/** One version of a file in a diff. A null side means the file doesn't exist there. */
+export interface DiffSide {
+  ref: string;
+  path: string;
+  label: string;
+}
 
 export interface SavedFilter {
   id: string;

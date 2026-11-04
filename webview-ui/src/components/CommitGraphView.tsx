@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { GitCommit } from '../types';
 import { useCommitStore } from '../stores/useCommitStore';
-import { GitBranch, Tag as TagIcon, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { timeAgo } from '../utils/fileHistory';
+import { CommitActions, RefBadges } from './CommitBits';
+import { iconButton } from './ui/styles';
 
 interface CommitGraphViewProps {
   commits: GitCommit[];
@@ -24,7 +27,7 @@ const LANE_COLORS = [
   '#06b6d4', // cyan
 ];
 
-const ROW_HEIGHT = 44;
+const ROW_HEIGHT = 32;
 const LANE_WIDTH = 20;
 const GRAPH_LEFT_PAD = 30;
 
@@ -106,37 +109,39 @@ export const CommitGraphView: React.FC<CommitGraphViewProps> = ({ commits }) => 
     return { nodes: calculatedNodes, totalLanes: Math.max(1, maxLane + 1) };
   }, [commits]);
 
-  const graphWidth = GRAPH_LEFT_PAD + totalLanes * LANE_WIDTH + 40;
+  const graphWidth = GRAPH_LEFT_PAD + totalLanes * LANE_WIDTH;
   const graphHeight = Math.max(600, nodes.length * ROW_HEIGHT);
 
   return (
     <div className="flex flex-col h-full overflow-hidden relative">
-      {/* Zoom controls */}
-      <div className="absolute top-3 right-4 z-20 flex items-center gap-1 bg-vscode-sidebar/90 border border-vscode-border rounded-lg p-1 shadow-md backdrop-blur">
-        <button
-          onClick={() => setZoom((z) => Math.max(0.6, z - 0.1))}
-          className="p-1.5 hover:bg-vscode-hover text-gray-300 rounded"
-          title="Zoom out"
-        >
-          <ZoomOut className="w-3.5 h-3.5" />
-        </button>
-        <span className="text-[11px] font-mono px-1 text-gray-400">
-          {Math.round(zoom * 100)}%
+      <div className="flex items-center justify-between gap-2 px-3 py-1 border-b border-vscode-border bg-vscode-sidebar/60 shrink-0">
+        <span className="text-[11px] text-gray-400">
+          {nodes.length} commits · {totalLanes} {totalLanes === 1 ? 'lane' : 'lanes'}
         </span>
-        <button
-          onClick={() => setZoom((z) => Math.min(1.5, z + 0.1))}
-          className="p-1.5 hover:bg-vscode-hover text-gray-300 rounded"
-          title="Zoom in"
-        >
-          <ZoomIn className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => setZoom(1)}
-          className="p-1.5 hover:bg-vscode-hover text-gray-300 rounded"
-          title="Reset zoom"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => setZoom((z) => Math.max(0.6, z - 0.1))}
+            className={iconButton}
+            title="Zoom out"
+            aria-label="Zoom out"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <span className="text-[11px] font-mono tabular-nums px-1 text-gray-400">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={() => setZoom((z) => Math.min(1.5, z + 0.1))}
+            className={iconButton}
+            title="Zoom in"
+            aria-label="Zoom in"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => setZoom(1)} className={iconButton} title="Reset zoom" aria-label="Reset zoom">
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Interactive Graph Canvas */}
@@ -216,46 +221,19 @@ export const CommitGraphView: React.FC<CommitGraphViewProps> = ({ commits }) => 
                 key={node.commit.hash}
                 onClick={() => selectCommit(node.commit.hash)}
                 style={{ height: ROW_HEIGHT }}
-                className="flex items-center justify-between px-3 border-b border-vscode-border/30 hover:bg-vscode-hover/80 transition cursor-pointer group"
+                className="group relative flex items-center gap-3 px-3 cursor-pointer hover:bg-vscode-hover transition-colors duration-100"
               >
-                <div className="flex items-center gap-2 overflow-hidden mr-4">
-                  <span className="font-mono text-xs text-blue-400 shrink-0 font-semibold">
-                    {node.commit.shortHash}
-                  </span>
-
-                  {node.commit.branches.slice(0, 2).map((b) => (
-                    <span
-                      key={b}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono shrink-0"
-                    >
-                      <GitBranch className="w-2.5 h-2.5" />
-                      {b}
-                    </span>
-                  ))}
-
-                  {node.commit.tags.slice(0, 1).map((t) => (
-                    <span
-                      key={t}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono shrink-0"
-                    >
-                      <TagIcon className="w-2.5 h-2.5" />
-                      {t}
-                    </span>
-                  ))}
-
-                  <span className="text-xs text-gray-200 truncate group-hover:text-blue-300 font-medium">
+                <span className="flex-1 min-w-0 flex items-center gap-1.5 text-xs">
+                  <span className="truncate font-medium text-gray-200" title={node.commit.subject}>
                     {node.commit.subject}
                   </span>
-                </div>
-
-                <div className="flex items-center gap-4 text-xs font-mono text-gray-400 shrink-0">
-                  <span className="truncate max-w-[120px] font-sans text-gray-300">
-                    {node.commit.author.name}
-                  </span>
-                  <span className="text-[11px]">
-                    {new Date(node.commit.author.timestamp).toLocaleDateString()}
-                  </span>
-                </div>
+                  <RefBadges commit={node.commit} />
+                </span>
+                <span className="text-[11px] text-gray-400 truncate shrink-0 max-w-[40%]">
+                  <span className="font-mono">{node.commit.shortHash}</span> · {node.commit.author.name} ·{' '}
+                  {timeAgo(node.commit.author.timestamp)}
+                </span>
+                <CommitActions commit={node.commit} />
               </div>
             ))}
           </div>

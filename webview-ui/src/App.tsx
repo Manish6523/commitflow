@@ -9,7 +9,14 @@ import { CommitGraphView } from './components/CommitGraphView';
 import { BranchExplorer } from './components/BranchExplorer';
 import { CommitCompareView } from './components/CommitCompareView';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
-import { CommitInspectorModal } from './components/CommitInspectorModal';
+import { CommitDetailPage } from './components/CommitDetailPage';
+import { FileHistoryView } from './components/FileHistoryView';
+import { CommitCardsSkeleton, CommitRowsSkeleton } from './components/ui/Skeletons';
+import { EmptyState } from './components/ui/EmptyState';
+import { ConfirmDialog } from './components/ui/Dialog';
+import { iconButton } from './components/ui/styles';
+import { vscode } from './vscode';
+import { ViewMode } from './types';
 import {
   ChevronLeft,
   ChevronRight,
@@ -18,6 +25,8 @@ import {
   CheckCircle2,
   X,
 } from 'lucide-react';
+
+const PAGED_VIEWS: ViewMode[] = ['grid', 'list', 'timeline', 'graph'];
 
 export const App: React.FC = () => {
   const {
@@ -31,6 +40,7 @@ export const App: React.FC = () => {
     loading,
     viewMode,
     selectedCommitDetails,
+    loadingDetails,
   } = useCommitStore();
 
   const [notification, setNotification] = useState<{
@@ -50,10 +60,14 @@ export const App: React.FC = () => {
 
       switch (msg.type) {
         case 'REPOSITORIES_LOADED': {
+          const previous = useCommitStore.getState().activeRepo;
           useCommitStore.setState({
             repositories: msg.repositories,
             activeRepo: msg.activeRepo,
           });
+          if (previous && previous.rootUri !== msg.activeRepo?.rootUri) {
+            useCommitStore.getState().resetRepositoryState();
+          }
           break;
         }
 
@@ -108,10 +122,35 @@ export const App: React.FC = () => {
           break;
         }
 
+        case 'SWITCH_VIEW': {
+          useCommitStore.getState().setViewMode(msg.view as ViewMode);
+          break;
+        }
+
+        case 'OPEN_FILE_HISTORY': {
+          useCommitStore.getState().openFileHistory(msg.filePath);
+          break;
+        }
+
+        case 'OPEN_COMMIT': {
+          useCommitStore.getState().selectCommit(msg.hash);
+          break;
+        }
+
+        case 'FOCUS_SEARCH': {
+          useCommitStore.getState().setViewMode('grid');
+          requestAnimationFrame(() => {
+            document.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
+          });
+          break;
+        }
+
         case 'GIT_OP_SUCCESS': {
           setNotification({ type: 'success', message: msg.message });
           setTimeout(() => setNotification(null), 4000);
-          loadCommits(page);
+          const store = useCommitStore.getState();
+          store.loadCommits(store.page);
+          if (store.viewMode === 'branches') store.loadBranchesAndTags();
           break;
         }
 
@@ -119,17 +158,37 @@ export const App: React.FC = () => {
         case 'ERROR': {
           setNotification({ type: 'error', message: msg.message || msg.error });
           setTimeout(() => setNotification(null), 6000);
-          useCommitStore.setState({ loading: false });
+          useCommitStore.setState({ loading: false, loadingDetails: false, comparing: false });
           break;
         }
       }
     };
 
     window.addEventListener('message', handleExtensionMessage);
+    vscode.postMessage({ type: 'WEBVIEW_READY' });
     return () => window.removeEventListener('message', handleExtensionMessage);
   }, []);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  const commitView = (skeleton: React.ReactNode, content: React.ReactNode) => {
+    if (commits.length > 0) {
+      return (
+        <div className={`h-full transition-opacity duration-150 ${loading ? 'opacity-60' : ''}`}>
+          {content}
+        </div>
+      );
+    }
+    return loading ? (
+      skeleton
+    ) : (
+      <EmptyState
+        icon={<GitCommit className="w-8 h-8" />}
+        title="No commits found"
+        detail="Try adjusting your search query or filters."
+      />
+    );
+  };
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-vscode-bg text-vscode-fg select-none">
@@ -138,124 +197,89 @@ export const App: React.FC = () => {
 
       {/* Toast Notification */}
       {notification && (
-        <div
-          className={`absolute top-14 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-xl text-xs font-medium animate-in slide-in-from-top-2 ${
-            notification.type === 'success'
-              ? 'bg-emerald-950/90 text-emerald-200 border-emerald-500/40'
-              : 'bg-rose-950/90 text-rose-200 border-rose-500/40'
-          }`}
-        >
+        <div className="absolute top-14 right-4 z-[60] flex items-center gap-2 pl-3 pr-1.5 py-1.5 max-w-md rounded-xl border border-vscode-border bg-vscode-sidebar shadow-xl text-xs text-gray-100 animate-in fade-in slide-in-from-top-2 duration-200">
           {notification.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
           )}
           <span>{notification.message}</span>
-          <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-75">
-            <X className="w-3.5 h-3.5" />
+          <button onClick={() => setNotification(null)} className={iconButton} aria-label="Dismiss">
+            <X className="w-3 h-3" />
           </button>
         </div>
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="relative flex-1 flex flex-col overflow-hidden">
         {/* Render SearchBar for card, list, timeline, graph */}
-        {['grid', 'list', 'timeline', 'graph'].includes(viewMode) && <SearchBar />}
+        {PAGED_VIEWS.includes(viewMode) && <SearchBar />}
 
         {/* View Switcher */}
         <div className="flex-1 overflow-y-auto">
-          {viewMode === 'grid' && (
-            <div className="p-4 flex flex-col justify-between min-h-full">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
-                  <GitCommit className="w-8 h-8 animate-spin text-blue-400" />
-                  <span className="text-xs">Loading commits...</span>
-                </div>
-              ) : commits.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
-                  <GitCommit className="w-8 h-8 text-gray-600" />
-                  <span className="text-sm font-semibold">No commits found</span>
-                  <span className="text-xs text-gray-500">
-                    Try adjusting your search query or filters.
-                  </span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div key={viewMode} className="h-full animate-in fade-in duration-200">
+            {viewMode === 'grid' &&
+              commitView(
+                <CommitCardsSkeleton />,
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
                   {commits.map((commit) => (
                     <CommitCard key={commit.hash} commit={commit} />
                   ))}
                 </div>
               )}
-            </div>
-          )}
 
-          {viewMode === 'list' && (
-            <div className="p-2 flex flex-col justify-between min-h-full">
-              {loading ? (
-                <div className="flex items-center justify-center py-20 text-gray-400 text-xs">
-                  Loading commits...
-                </div>
-              ) : commits.length === 0 ? (
-                <div className="text-center py-20 text-gray-400 text-xs">No commits found</div>
-              ) : (
-                <CommitListView commits={commits} />
-              )}
-            </div>
-          )}
+            {viewMode === 'list' && commitView(<CommitRowsSkeleton />, <CommitListView commits={commits} />)}
 
-          {viewMode === 'timeline' && (
-            <div className="p-4">
-              <CommitTimelineView commits={commits} />
-            </div>
-          )}
+            {viewMode === 'timeline' &&
+              commitView(<CommitRowsSkeleton />, <CommitTimelineView commits={commits} />)}
 
-          {viewMode === 'graph' && <CommitGraphView commits={commits} />}
+            {viewMode === 'graph' && commitView(<CommitRowsSkeleton />, <CommitGraphView commits={commits} />)}
 
-          {viewMode === 'branches' && <BranchExplorer />}
+            {viewMode === 'branches' && <BranchExplorer />}
 
-          {viewMode === 'compare' && <CommitCompareView />}
+            {viewMode === 'fileHistory' && <FileHistoryView />}
 
-          {viewMode === 'analytics' && <AnalyticsDashboard />}
+            {viewMode === 'compare' && <CommitCompareView />}
+
+            {viewMode === 'analytics' && <AnalyticsDashboard />}
+          </div>
         </div>
 
-        {/* Bottom Pagination Bar (for Grid & List views) */}
-        {['grid', 'list'].includes(viewMode) && totalCount > 0 && (
-          <div className="border-t border-vscode-border bg-vscode-sidebar/90 px-4 py-2 flex items-center justify-between text-xs text-gray-400 shrink-0">
-            <div className="flex items-center gap-2">
-              <span>
-                Showing page <span className="font-semibold text-gray-200">{page}</span> of{' '}
-                <span className="font-semibold text-gray-200">{totalPages}</span>
-              </span>
-              <span className="text-[11px] text-gray-500">
-                ({totalCount.toLocaleString()} total commits)
-              </span>
-            </div>
+        {/* Bottom Pagination Bar */}
+        {PAGED_VIEWS.includes(viewMode) && totalCount > 0 && (
+          <div className="border-t border-vscode-border bg-vscode-sidebar/60 px-3 py-1 flex items-center justify-between text-[11px] text-gray-400 shrink-0">
+            <span className="tabular-nums">
+              Page {page} of {totalPages}
+            </span>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-0.5">
               <button
                 onClick={() => loadCommits(Math.max(1, page - 1))}
                 disabled={page <= 1 || loading}
-                className="px-2.5 py-1 rounded bg-vscode-input hover:bg-vscode-hover border border-vscode-border text-gray-200 disabled:opacity-40 transition flex items-center gap-1"
+                className={iconButton}
+                title="Previous page"
+                aria-label="Previous page"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
-                <span>Prev</span>
               </button>
-
               <button
                 onClick={() => loadCommits(page + 1)}
                 disabled={!hasMore || loading}
-                className="px-2.5 py-1 rounded bg-vscode-input hover:bg-vscode-hover border border-vscode-border text-gray-200 disabled:opacity-40 transition flex items-center gap-1"
+                className={iconButton}
+                title="Next page"
+                aria-label="Next page"
               >
-                <span>Next</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         )}
+
+        {/* Full-page commit details, layered over the view it was opened from */}
+        {(selectedCommitDetails || loadingDetails) && <CommitDetailPage />}
       </div>
 
-      {/* Commit Detail Inspector Modal */}
-      {selectedCommitDetails && <CommitInspectorModal />}
+      <ConfirmDialog />
     </div>
   );
 };

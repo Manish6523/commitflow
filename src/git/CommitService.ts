@@ -1,4 +1,5 @@
 import { GitProcess } from './GitProcess';
+import { parseRawNumstatZ } from './parseChanges';
 import { CommitDetails, CommitFilterOptions, FileChange, FileStatus, GitCommit } from '../types/git';
 
 const FIELD_SEP = '\x1f';
@@ -286,12 +287,13 @@ export class CommitService {
     }
     const baseCommit = commits[0];
 
-    // 2. Get changed files list with numstat and raw status
+    // 2. Get changed files with status and line counts. Merges are diffed
+    // against their first parent, matching what the diff view compares.
     const numstatRes = await GitProcess.exec(
-      ['show', cleanHash, '--numstat', '--name-status', '--format='],
+      ['show', cleanHash, '--raw', '--numstat', '-z', '--diff-merges=first-parent', '--format='],
       { cwd: repoRoot }
     );
-    const files = this.parseNumstatAndStatus(numstatRes.stdout);
+    const files = parseRawNumstatZ(numstatRes.stdout);
 
     // Update stats from actual parsed files if shortstat was missing
     let totalIns = 0;

@@ -7,6 +7,8 @@ import { BranchService } from '../git/BranchService';
 import { TagService } from '../git/TagService';
 import { DiffService } from '../git/DiffService';
 import { FileHistoryService } from '../git/FileHistoryService';
+import { FileContentService, WORKING_COPY_REF } from '../git/FileContentService';
+import { RevisionContentProvider } from '../providers/RevisionContentProvider';
 import { AnalyticsService } from '../services/AnalyticsService';
 import { SearchService } from '../services/SearchService';
 import { StorageService } from '../services/StorageService';
@@ -190,17 +192,37 @@ export class MessageHandler {
         }
 
         case 'GET_FILE_HISTORY': {
-          if (!this.activeRepo) return;
-          const commits = await FileHistoryService.getFileHistory(
-            this.activeRepo.rootUri,
-            message.filePath
+          const target = await this.resolveFile(message.filePath);
+          const history = await FileHistoryService.getFileHistory(
+            target.repoRoot,
+            target.filePath,
+            message.offset,
+            message.limit
           );
           this.postMessage({
             type: 'FILE_HISTORY_LOADED',
-            filePath: message.filePath,
-            commits,
+            filePath: target.filePath,
+            ...history,
             requestId,
           });
+          break;
+        }
+
+        case 'GET_FILE_CONTENT': {
+          const target = await this.resolveFile(message.filePath);
+          const file = await FileContentService.getContent(
+            target.repoRoot,
+            message.ref,
+            target.filePath
+          );
+          this.postMessage({ type: 'FILE_CONTENT_LOADED', ...file, requestId });
+          break;
+        }
+
+        case 'GET_TRACKED_FILES': {
+          const repo = await this.requireActiveRepo();
+          const files = await FileContentService.listTrackedFiles(repo.rootUri);
+          this.postMessage({ type: 'TRACKED_FILES_LOADED', files, requestId });
           break;
         }
 
@@ -292,17 +314,24 @@ export class MessageHandler {
         }
 
         case 'OPEN_DIFF_EDITOR': {
-          if (!this.activeRepo) return;
-          // Open VS Code's native diff comparison
-          const fullPath = path.isAbsolute(message.filePath)
-            ? message.filePath
-            : path.join(this.activeRepo.rootUri, message.filePath);
-          const docUri = vscode.Uri.file(fullPath);
+          const { repoRoot, filePath } = await this.resolveFile(message.filePath);
+          const { baseHash, targetHash, basePath } = message;
+          const label = (ref: string | null) =>
+            ref === null
+              ? 'none'
+              : ref === WORKING_COPY_REF
+              ? 'Working Copy'
+              : /^[0-9a-f]{40}$/.test(ref)
+              ? ref.substring(0, 7)
+              : ref;
+
           await vscode.commands.executeCommand(
             'vscode.diff',
-            docUri.with({ scheme: 'git', query: JSON.stringify({ ref: message.baseHash }) }),
-            docUri.with({ scheme: 'git', query: JSON.stringify({ ref: message.targetHash }) }),
-            `${path.basename(message.filePath)} (${message.baseHash.substring(0, 7)} ↔ ${message.targetHash.substring(0, 7)})`
+            RevisionContentProvider.toUri(repoRoot, baseHash, basePath ?? filePath),
+            targetHash === WORKING_COPY_REF
+              ? vscode.Uri.file(path.join(repoRoot, filePath))
+              : RevisionContentProvider.toUri(repoRoot, targetHash, filePath),
+            `${path.basename(filePath)} (${label(baseHash)} ↔ ${label(targetHash)})`
           );
           break;
         }
@@ -314,6 +343,53 @@ export class MessageHandler {
         requestId,
       });
     }
+  }
+
+  private async requireActiveRepo(): Promise<RepositoryInfo> {
+    if (!this.activeRepo) {
+      await this.refreshRepositories();
+    }
+    if (!this.activeRepo) {
+      throw new Error('No Git repository found in this workspace.');
+    }
+    return this.activeRepo;
+  }
+
+  /**
+   * Resolve a file to a repository and repo-relative path. An absolute path may
+   * belong to a repository other than the active one, which then becomes active.
+   */
+  private async resolveFile(filePath: string): Promise<{ repoRoot: string; filePath: string }> {
+    const active = await this.requireActiveRepo();
+    if (!path.isAbsolute(filePath)) {
+      return { repoRoot: active.rootUri, filePath: filePath.replace(/\\/g, '/') };
+    }
+
+    const isInside = (root: string) => {
+      const relative = path.relative(root, filePath);
+      return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+    };
+    const owner = this.repositories
+      .filter((repo) => isInside(repo.rootUri))
+      .sort((a, b) => b.rootUri.length - a.rootUri.length)[0];
+    if (!owner) {
+      throw new Error(`${path.basename(filePath)} is not inside a Git repository in this workspace.`);
+    }
+
+    if (owner.rootUri !== active.rootUri) {
+      this.activeRepo = owner;
+      await this.storageService.setLastRepository(owner.rootUri);
+      this.postMessage({
+        type: 'REPOSITORIES_LOADED',
+        repositories: this.repositories,
+        activeRepo: owner,
+      });
+    }
+
+    return {
+      repoRoot: owner.rootUri,
+      filePath: path.relative(owner.rootUri, filePath).split(path.sep).join('/'),
+    };
   }
 
   private async refreshRepositories(): Promise<void> {

@@ -1,88 +1,88 @@
 import { GitProcess } from './GitProcess';
-import { FileHistoryCommit, FileStatus } from '../types/git';
+import { parseRawNumstatZ } from './parseChanges';
+import { FileHistoryCommit, FileHistoryResult } from '../types/git';
 
 const SEP = '\x1f';
 const REC_SEP = '\x1e';
-const FILE_LOG_FORMAT = ['%H', '%h', '%an', '%ae', '%aI', '%at', '%s'].join(SEP) + REC_SEP;
+// The record separator leads each record so the stats git prints after the
+// formatted header stay with the commit they belong to.
+const FILE_LOG_FORMAT = REC_SEP + ['%H', '%h', '%P', '%an', '%ae', '%aI', '%at', '%s', ''].join(SEP);
 
 export class FileHistoryService {
   /**
-   * Get complete commit history for an individual file with rename tracking (--follow).
+   * Get one page of a file's history, following renames.
+   *
+   * `git log --follow` applies `--skip` before filtering to the file, so paging
+   * asks for everything up to the end of the page and slices it here.
    */
   public static async getFileHistory(
     repoRoot: string,
     filePath: string,
+    offset: number = 0,
     limit: number = 100
-  ): Promise<FileHistoryCommit[]> {
-    const commits: FileHistoryCommit[] = [];
-
-    try {
-      const res = await GitProcess.exec(
+  ): Promise<FileHistoryResult> {
+    const [logRes, statusRes] = await Promise.all([
+      GitProcess.exec(
         [
           'log',
           '--follow',
-          `--format=${FILE_LOG_FORMAT}`,
+          '-M',
+          '-z',
+          '--raw',
           '--numstat',
+          `--format=${FILE_LOG_FORMAT}`,
           '-n',
-          `${limit}`,
+          `${offset + limit + 1}`,
           '--',
           filePath,
         ],
         { cwd: repoRoot }
-      );
+      ),
+      GitProcess.exec(['status', '--porcelain', '--', filePath], { cwd: repoRoot }),
+    ]);
 
-      const records = res.stdout.split(REC_SEP);
-      for (const record of records) {
-        if (!record.trim()) continue;
+    const all = this.parseLog(logRes.stdout, filePath);
+    return {
+      commits: all.slice(offset, offset + limit),
+      hasMore: all.length > offset + limit,
+      isModified: statusRes.stdout.trim().length > 0,
+    };
+  }
 
-        const parts = record.split(SEP);
-        if (parts.length < 7) continue;
+  /**
+   * Parse the log newest-first, tracking the file's path back through renames.
+   */
+  public static parseLog(output: string, filePath: string): FileHistoryCommit[] {
+    const commits: FileHistoryCommit[] = [];
+    let currentPath = filePath;
 
-        const hash = parts[0].trim();
-        const shortHash = parts[1].trim();
-        const authorName = parts[2].trim();
-        const authorEmail = parts[3].trim();
-        const authorDate = parts[4].trim();
-        const authorTimestamp = parseInt(parts[5].trim(), 10) * 1000 || Date.now();
-        const subjectAndStats = parts.slice(6).join(SEP);
+    for (const record of output.split(REC_SEP)) {
+      if (!record.trim()) continue;
 
-        const lines = subjectAndStats.split('\n');
-        const subject = lines[0].trim();
+      const parts = record.split(SEP);
+      if (parts.length < 9) continue;
 
-        let insertions = 0;
-        let deletions = 0;
-        let status: FileStatus = 'M';
+      const [hash, shortHash, parents, name, email, date, timestamp, subject] = parts;
+      const change = parseRawNumstatZ(parts.slice(8).join(SEP))[0];
+      const path = change?.path ?? currentPath;
 
-        for (let i = 1; i < lines.length; i++) {
-          const l = lines[i].trim();
-          const match = l.match(/^([0-9-]+)\t([0-9-]+)\t(.+)$/);
-          if (match) {
-            insertions = match[1] === '-' ? 0 : parseInt(match[1], 10) || 0;
-            deletions = match[2] === '-' ? 0 : parseInt(match[2], 10) || 0;
-            break;
-          }
-        }
+      commits.push({
+        hash: hash.replace(/\0/g, '').trim(),
+        shortHash,
+        parentHash: parents.split(' ')[0] || null,
+        author: { name, email, date, timestamp: parseInt(timestamp, 10) * 1000 },
+        subject,
+        status: change?.status ?? 'M',
+        path,
+        oldPath: change?.oldPath,
+        insertions: change?.insertions ?? 0,
+        deletions: change?.deletions ?? 0,
+        isBinary: change?.isBinary ?? false,
+      });
 
-        commits.push({
-          hash,
-          shortHash,
-          author: {
-            name: authorName,
-            email: authorEmail,
-            date: authorDate,
-            timestamp: authorTimestamp,
-          },
-          subject,
-          status,
-          insertions,
-          deletions,
-        });
-      }
-    } catch {
-      // File history error or new untracked file
+      currentPath = change?.oldPath ?? path;
     }
 
     return commits;
   }
 }
-

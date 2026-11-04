@@ -38,3 +38,63 @@ body {
   background: var(--vscode-scrollbarSlider-activeBackground, rgba(191, 191, 191, 0.4));
 }
 
+
+/* Motion */
+.cf-skeleton {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--vscode-foreground, #ccc) 8%, transparent) 25%,
+    color-mix(in srgb, var(--vscode-foreground, #ccc) 16%, transparent) 50%,
+    color-mix(in srgb, var(--vscode-foreground, #ccc) 8%, transparent) 75%
+  );
+  background-size: 200% 100%;
+  animation: cf-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes cf-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Delayed so fast loads never flash a progress bar. */
+.cf-progress {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  right: 0;
+  height: 2px;
+  overflow: hidden;
+  opacity: 0;
+  animation: cf-fade-in 120ms ease-out 150ms forwards;
+}
+
+.cf-progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 35%;
+  background: var(--vscode-progressBar-background, #0e70c0);
+  animation: cf-slide 1s ease-in-out infinite;
+}
+
+@keyframes cf-fade-in {
+  to { opacity: 1; }
+}
+
+@keyframes cf-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  outline-offset: -1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

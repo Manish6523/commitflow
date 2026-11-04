@@ -1,99 +1,89 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { GitCommit } from '../types';
-import { CommitCard } from './CommitCard';
-import { Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { useCommitStore } from '../stores/useCommitStore';
+import { timeAgo } from '../utils/fileHistory';
+import { CommitActions, CommitStats, RefBadges } from './CommitBits';
+import { TimelineRow } from './ui/TimelineRow';
 
-interface CommitTimelineViewProps {
-  commits: GitCommit[];
-}
+const groupTitle = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
 
-export const CommitTimelineView: React.FC<CommitTimelineViewProps> = ({ commits }) => {
-  const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
+  if (date.toDateString() === today.toDateString()) return 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+};
 
-  const toggleGroup = (group: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
-  };
+export const CommitTimelineView: React.FC<{ commits: GitCommit[] }> = ({ commits }) => {
+  const selectCommit = useCommitStore((state) => state.selectCommit);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  const grouped = useMemo(() => {
-    const groups: { title: string; commits: GitCommit[] }[] = [];
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-
+  const groups = useMemo(() => {
     const map = new Map<string, GitCommit[]>();
-
-    for (const c of commits) {
-      const cDate = new Date(c.author.timestamp);
-      const cDateStr = cDate.toISOString().split('T')[0];
-
-      let key = '';
-      if (cDateStr === todayStr) {
-        key = 'Today';
-      } else if (cDateStr === yesterdayStr) {
-        key = 'Yesterday';
-      } else {
-        key = cDate.toLocaleDateString(undefined, {
-          month: 'long',
-          year: 'numeric',
-        });
-      }
-
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
-      map.get(key)!.push(c);
+    for (const commit of commits) {
+      const title = groupTitle(commit.author.timestamp);
+      map.set(title, [...(map.get(title) ?? []), commit]);
     }
-
-    for (const [title, list] of map.entries()) {
-      groups.push({ title, commits: list });
-    }
-
-    return groups;
+    return Array.from(map, ([title, list]) => ({ title, commits: list }));
   }, [commits]);
 
   return (
-    <div className="flex flex-col gap-6 py-2 px-1 max-w-5xl mx-auto w-full">
-      {grouped.map((group) => {
-        const isCollapsed = collapsedGroups[group.title];
+    <div className="w-full">
+      {groups.map((group) => (
+        <section key={group.title}>
+          <button
+            onClick={() => setCollapsed((prev) => ({ ...prev, [group.title]: !prev[group.title] }))}
+            aria-expanded={!collapsed[group.title]}
+            className="sticky top-0 z-20 w-full flex items-center gap-1.5 px-2 py-1 border-b border-vscode-border bg-vscode-sidebar text-left text-[11px] font-semibold text-gray-200"
+          >
+            <ChevronRight
+              className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-150 ${
+                collapsed[group.title] ? '' : 'rotate-90'
+              }`}
+            />
+            {group.title}
+            <span className="ml-auto font-normal text-gray-400">{group.commits.length}</span>
+          </button>
 
-        return (
-          <div key={group.title} className="flex flex-col">
-            {/* Group Header */}
-            <button
-              onClick={() => toggleGroup(group.title)}
-              className="flex items-center gap-2 py-2 px-3 rounded-lg bg-vscode-sidebar/90 border border-vscode-border hover:bg-vscode-hover transition text-left group sticky top-0 z-20 backdrop-blur"
-            >
-              {isCollapsed ? (
-                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-white" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-white" />
-              )}
-              <Calendar className="w-4 h-4 text-blue-400" />
-              <span className="font-semibold text-xs text-gray-200">{group.title}</span>
-              <span className="text-[11px] font-mono text-gray-400 ml-auto bg-vscode-input px-2 py-0.5 rounded-full border border-vscode-border">
-                {group.commits.length} commit{group.commits.length === 1 ? '' : 's'}
-              </span>
-            </button>
-
-            {/* Timeline nodes */}
-            {!isCollapsed && (
-              <div className="relative pl-6 ml-4 border-l-2 border-vscode-border/80 mt-3 space-y-4">
-                {group.commits.map((commit) => (
-                  <div key={commit.hash} className="relative">
-                    {/* Timeline bullet */}
-                    <div className="absolute -left-[31px] top-4 w-3 h-3 rounded-full bg-blue-500 border-2 border-vscode-bg shadow-sm" />
-                    <CommitCard commit={commit} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+          {!collapsed[group.title] && (
+            <div className="py-1 animate-in fade-in duration-150">
+              {group.commits.map((commit, index) => (
+                <TimelineRow
+                  key={commit.hash}
+                  isLast={index === group.commits.length - 1}
+                  dotClass={commit.isMerge ? 'bg-purple-500' : 'bg-blue-500'}
+                  onClick={() => selectCommit(commit.hash)}
+                  title={
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate" title={commit.subject}>
+                        {commit.subject}
+                      </span>
+                      <RefBadges commit={commit} />
+                    </span>
+                  }
+                  meta={
+                    <>
+                      <span className="font-mono">{commit.shortHash}</span> · {commit.author.name} ·{' '}
+                      <span title={new Date(commit.author.timestamp).toLocaleString()}>
+                        {timeAgo(commit.author.timestamp)}
+                      </span>
+                    </>
+                  }
+                  actions={
+                    <>
+                      <CommitStats commit={commit} />
+                      <CommitActions commit={commit} />
+                    </>
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
     </div>
   );
 };
-

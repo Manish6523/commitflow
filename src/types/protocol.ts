@@ -1,4 +1,4 @@
-import { Branch, CommitComparisonResult, CommitDetails, ContributorStats, FileHistoryCommit, GitCommit, RepositoryInfo, Tag } from './git';
+import { Branch, CommitComparisonResult, CommitDetails, ContributorStats, FileContent, FileHistoryResult, GitCommit, RepositoryInfo, Tag } from './git';
 
 export interface CommitFilterOptions {
   authors?: string[];
@@ -45,7 +45,9 @@ export type WebviewToExtensionAction =
   | { type: 'COMPARE_COMMITS'; baseHash: string; targetHash: string }
   | { type: 'GET_BRANCHES_TAGS' }
   | { type: 'GET_ANALYTICS' }
-  | { type: 'GET_FILE_HISTORY'; filePath: string }
+  | { type: 'GET_FILE_HISTORY'; filePath: string; offset?: number; limit?: number }
+  | { type: 'GET_FILE_CONTENT'; ref: string; filePath: string }
+  | { type: 'GET_TRACKED_FILES' }
   | { type: 'EXECUTE_GIT_OP'; operation: 'checkout' | 'cherry-pick' | 'revert' | 'create-branch' | 'create-tag' | 'delete-branch'; params: Record<string, any> }
   | { type: 'GET_SAVED_FILTERS' }
   | { type: 'SAVE_FILTER'; filter: Omit<SavedFilter, 'id' | 'createdAt'> }
@@ -55,7 +57,8 @@ export type WebviewToExtensionAction =
   | { type: 'AI_ACTION'; action: 'summarize' | 'nl_search' | 'release_notes' | 'explain'; payload: any }
   | { type: 'COPY_TO_CLIPBOARD'; text: string }
   | { type: 'OPEN_IN_EDITOR'; filePath: string; line?: number }
-  | { type: 'OPEN_DIFF_EDITOR'; baseHash: string; targetHash: string; filePath: string };
+  | { type: 'OPEN_DIFF_EDITOR'; baseHash: string | null; targetHash: string | null; filePath: string; basePath?: string }
+  | { type: 'WEBVIEW_READY' };
 
 export type WebviewMessage = WebviewToExtensionAction & { id?: string };
 
@@ -68,7 +71,13 @@ export type ExtensionToWebviewAction =
   | { type: 'COMPARE_RESULT_LOADED'; result: CommitComparisonResult }
   | { type: 'BRANCHES_TAGS_LOADED'; branches: Branch[]; tags: Tag[] }
   | { type: 'ANALYTICS_LOADED'; analytics: AnalyticsData }
-  | { type: 'FILE_HISTORY_LOADED'; filePath: string; commits: FileHistoryCommit[] }
+  | ({ type: 'FILE_HISTORY_LOADED'; filePath: string } & FileHistoryResult)
+  | ({ type: 'FILE_CONTENT_LOADED' } & FileContent)
+  | { type: 'TRACKED_FILES_LOADED'; files: string[] }
+  | { type: 'SWITCH_VIEW'; view: string }
+  | { type: 'OPEN_FILE_HISTORY'; filePath: string }
+  | { type: 'OPEN_COMMIT'; hash: string }
+  | { type: 'FOCUS_SEARCH' }
   | { type: 'GIT_OP_SUCCESS'; operation: string; message: string }
   | { type: 'GIT_OP_ERROR'; operation: string; error: string }
   | { type: 'SAVED_FILTERS_LOADED'; filters: SavedFilter[] }

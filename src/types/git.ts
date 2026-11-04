@@ -91,8 +91,26 @@ export interface FileHistoryCommit {
   author: GitAuthor;
   subject: string;
   status: FileStatus;
+  /** The file's path at this commit, which differs from today's after a rename. */
+  path: string;
+  oldPath?: string;
+  parentHash: string | null;
   insertions: number;
   deletions: number;
+  isBinary: boolean;
+}
+
+export interface FileHistoryResult {
+  commits: FileHistoryCommit[];
+  hasMore: boolean;
+  isModified: boolean;
+}
+
+export interface FileContent {
+  content: string;
+  exists: boolean;
+  isBinary: boolean;
+  tooLarge: boolean;
 }
 
 export interface ContributorStats {

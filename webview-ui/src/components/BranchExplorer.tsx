@@ -1,386 +1,288 @@
-import React, { useState } from 'react';
-import { useCommitStore } from '../stores/useCommitStore';
+import React, { useMemo, useState } from 'react';
 import {
-  GitBranch,
-  Tag as TagIcon,
-  ArrowUp,
   ArrowDown,
+  ArrowUp,
   Check,
-  Trash2,
-  Plus,
   ExternalLink,
+  GitBranch,
+  Plus,
+  Search,
+  Tag as TagIcon,
+  Trash2,
 } from 'lucide-react';
+import { useCommitStore } from '../stores/useCommitStore';
+import { Branch } from '../types';
+import { Dialog, DialogButtons } from './ui/Dialog';
+import { EmptyState } from './ui/EmptyState';
+import { ghostButton, textInput, underlineTab } from './ui/styles';
 
-export const BranchExplorer: React.FC = () => {
-  const {
-    branches,
-    tags,
-    executeGitOp,
-    loadBranchesAndTags,
-    selectCommit,
-  } = useCommitStore();
+const rowClass =
+  'group relative flex items-center gap-2.5 px-3 py-1.5 hover:bg-vscode-hover transition-colors duration-100';
 
-  const [tab, setTab] = useState<'local' | 'remote' | 'tags'>('local');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newBranchName, setNewBranchName] = useState('');
-  const [showTagModal, setShowTagModal] = useState(false);
-  const [newTagName, setNewTagName] = useState('');
-  const [newTagMessage, setNewTagMessage] = useState('');
+const hoverActions =
+  'flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-100';
 
-  const localBranches = branches.filter((b) => !b.isRemote);
-  const remoteBranches = branches.filter((b) => b.isRemote);
+const BranchRow: React.FC<{ branch: Branch }> = ({ branch }) => {
+  const { executeGitOp, requestConfirm } = useCommitStore();
 
-  const handleCheckout = (target: string) => {
-    if (window.confirm(`Checkout '${target}'?`)) {
-      executeGitOp('checkout', { target });
-    }
-  };
-
-  const handleDeleteBranch = (name: string) => {
-    if (window.confirm(`Are you sure you want to delete branch '${name}'?`)) {
-      executeGitOp('delete-branch', { name, force: false });
-    }
-  };
-
-  const handleCreateBranch = async () => {
-    if (!newBranchName.trim()) return;
-    await executeGitOp('create-branch', { name: newBranchName.trim(), startPoint: 'HEAD' });
-    setNewBranchName('');
-    setShowCreateModal(false);
-  };
-
-  const handleCreateTag = async () => {
-    if (!newTagName.trim()) return;
-    await executeGitOp('create-tag', {
-      name: newTagName.trim(),
-      targetHash: 'HEAD',
-      message: newTagMessage.trim() || undefined,
+  const checkout = () =>
+    requestConfirm({
+      title: `Checkout ${branch.name}?`,
+      detail: 'Make sure your work is saved first.',
+      label: 'Checkout',
+      onConfirm: () => executeGitOp('checkout', { target: branch.name }),
     });
-    setNewTagName('');
-    setNewTagMessage('');
-    setShowTagModal(false);
-    loadBranchesAndTags();
-  };
+
+  const remove = () =>
+    requestConfirm({
+      title: `Delete ${branch.name}?`,
+      detail: 'Git will refuse if the branch has unmerged commits.',
+      label: 'Delete Branch',
+      danger: true,
+      onConfirm: () => executeGitOp('delete-branch', { name: branch.name, force: false }),
+    });
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-vscode-bg p-4 max-w-5xl mx-auto w-full">
-      {/* Top Header & Tabs */}
-      <div className="flex items-center justify-between pb-3 border-b border-vscode-border flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <div className="flex bg-vscode-sidebar border border-vscode-border rounded-lg p-0.5 text-xs">
-            <button
-              onClick={() => setTab('local')}
-              className={`px-3 py-1 rounded-md font-medium transition ${
-                tab === 'local' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Local Branches ({localBranches.length})
-            </button>
-            <button
-              onClick={() => setTab('remote')}
-              className={`px-3 py-1 rounded-md font-medium transition ${
-                tab === 'remote' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Remote Branches ({remoteBranches.length})
-            </button>
-            <button
-              onClick={() => setTab('tags')}
-              className={`px-3 py-1 rounded-md font-medium transition ${
-                tab === 'tags' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Tags ({tags.length})
-            </button>
-          </div>
-        </div>
+    <div className={rowClass}>
+      <GitBranch className={`w-3.5 h-3.5 shrink-0 ${branch.isCurrent ? 'text-blue-500' : 'text-gray-500'}`} />
 
-        <div className="flex items-center gap-2">
-          {tab !== 'tags' ? (
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="font-mono font-medium text-gray-100 truncate">{branch.name}</span>
+          {branch.isCurrent && (
+            <span className="px-1 rounded text-[10px] bg-blue-500/15 text-blue-500 shrink-0">current</span>
+          )}
+          {branch.upstream && (
+            <span className="text-[11px] text-gray-400 truncate">→ {branch.upstream}</span>
+          )}
+        </div>
+        <div className="text-[11px] text-gray-400 truncate mt-0.5">
+          <span className="font-mono">{branch.lastCommitHash}</span> · {branch.lastCommitSubject}
+        </div>
+      </div>
+
+      {branch.upstream && (branch.ahead > 0 || branch.behind > 0) && (
+        <span className="flex items-center gap-1.5 font-mono text-[11px] tabular-nums shrink-0">
+          {branch.ahead > 0 && (
+            <span className="flex items-center text-emerald-500" title={`${branch.ahead} ahead of upstream`}>
+              <ArrowUp className="w-3 h-3" />
+              {branch.ahead}
+            </span>
+          )}
+          {branch.behind > 0 && (
+            <span className="flex items-center text-amber-500" title={`${branch.behind} behind upstream`}>
+              <ArrowDown className="w-3 h-3" />
+              {branch.behind}
+            </span>
+          )}
+        </span>
+      )}
+
+      {!branch.isCurrent && (
+        <div className={hoverActions}>
+          <button onClick={checkout} className={ghostButton}>
+            <Check className="w-3 h-3" />
+            Checkout
+          </button>
+          {!branch.isRemote && (
             <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-md shadow transition"
+              onClick={remove}
+              className="p-1.5 rounded-md text-gray-300 hover:text-rose-500 hover:bg-vscode-hover transition-colors"
+              title="Delete branch"
+              aria-label={`Delete branch ${branch.name}`}
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Branch</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowTagModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium rounded-md shadow transition"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Tag</span>
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-      </div>
+      )}
+    </div>
+  );
+};
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto py-3 space-y-2">
-        {/* Local Branches Tab */}
-        {tab === 'local' && (
-          <div className="space-y-2">
-            {localBranches.map((br) => (
-              <div
-                key={br.name}
-                className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition ${
-                  br.isCurrent
-                    ? 'bg-blue-900/15 border-blue-500/50'
-                    : 'bg-vscode-sidebar/50 border-vscode-border hover:bg-vscode-sidebar'
-                }`}
-              >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div
-                    className={`p-2 rounded-lg ${
-                      br.isCurrent ? 'bg-blue-500 text-white' : 'bg-vscode-input text-gray-400'
-                    }`}
-                  >
-                    <GitBranch className="w-4 h-4" />
-                  </div>
-                  <div className="flex flex-col overflow-hidden">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-xs text-gray-100 font-mono">
-                        {br.name}
-                      </span>
-                      {br.isCurrent && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-500/20 text-blue-400 font-medium border border-blue-500/30">
-                          Current HEAD
-                        </span>
-                      )}
-                      {br.upstream && (
-                        <span className="text-[11px] text-gray-400 font-mono">
-                          tracks <span className="text-gray-300">{br.upstream}</span>
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5 truncate">
-                      <span className="font-mono text-blue-400">{br.lastCommitHash}</span>
-                      <span className="truncate">{br.lastCommitSubject}</span>
-                    </div>
-                  </div>
-                </div>
+export const BranchExplorer: React.FC = () => {
+  const { branches, tags, executeGitOp, loadBranchesAndTags, selectCommit } = useCommitStore();
 
-                <div className="flex items-center gap-3 shrink-0">
-                  {/* Ahead/behind counters */}
-                  {br.upstream && (
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                      {br.ahead > 0 && (
-                        <span
-                          className="flex items-center text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20"
-                          title={`${br.ahead} commits ahead of upstream`}
-                        >
-                          <ArrowUp className="w-3 h-3 mr-0.5" />
-                          {br.ahead}
-                        </span>
-                      )}
-                      {br.behind > 0 && (
-                        <span
-                          className="flex items-center text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20"
-                          title={`${br.behind} commits behind upstream`}
-                        >
-                          <ArrowDown className="w-3 h-3 mr-0.5" />
-                          {br.behind}
-                        </span>
-                      )}
-                    </div>
-                  )}
+  const [tab, setTab] = useState<'local' | 'remote' | 'tags'>('local');
+  const [filter, setFilter] = useState('');
+  const [showBranchDialog, setShowBranchDialog] = useState(false);
+  const [showTagDialog, setShowTagDialog] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newTagMessage, setNewTagMessage] = useState('');
 
-                  {/* Actions */}
-                  {!br.isCurrent && (
-                    <button
-                      onClick={() => handleCheckout(br.name)}
-                      className="px-2.5 py-1 rounded bg-vscode-input hover:bg-blue-600 hover:text-white border border-vscode-border text-xs font-medium text-gray-300 transition flex items-center gap-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Checkout</span>
-                    </button>
-                  )}
+  const query = filter.trim().toLowerCase();
+  const localBranches = useMemo(() => branches.filter((b) => !b.isRemote), [branches]);
+  const remoteBranches = useMemo(() => branches.filter((b) => b.isRemote), [branches]);
+  const visibleBranches = (tab === 'local' ? localBranches : remoteBranches).filter((b) =>
+    b.name.toLowerCase().includes(query)
+  );
+  const visibleTags = tags.filter((t) => t.name.toLowerCase().includes(query));
 
-                  {!br.isCurrent && (
-                    <button
-                      onClick={() => handleDeleteBranch(br.name)}
-                      className="p-1.5 rounded hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 transition"
-                      title="Delete Branch"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+  const closeDialogs = () => {
+    setShowBranchDialog(false);
+    setShowTagDialog(false);
+    setNewName('');
+    setNewTagMessage('');
+  };
 
-        {/* Remote Branches Tab */}
-        {tab === 'remote' && (
-          <div className="space-y-2">
-            {remoteBranches.map((br) => (
-              <div
-                key={br.name}
-                className="p-3 rounded-xl border border-vscode-border bg-vscode-sidebar/50 hover:bg-vscode-sidebar flex items-center justify-between gap-3 transition"
-              >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="p-2 rounded-lg bg-vscode-input text-gray-400">
-                    <GitBranch className="w-4 h-4" />
-                  </div>
-                  <div className="flex flex-col overflow-hidden">
-                    <span className="font-semibold text-xs text-gray-200 font-mono">
-                      {br.name}
-                    </span>
-                    <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5 truncate">
-                      <span className="font-mono text-blue-400">{br.lastCommitHash}</span>
-                      <span className="truncate">{br.lastCommitSubject}</span>
-                    </div>
-                  </div>
-                </div>
+  const createBranch = async () => {
+    if (!newName.trim()) return;
+    await executeGitOp('create-branch', { name: newName.trim(), startPoint: 'HEAD' });
+    closeDialogs();
+  };
 
-                <button
-                  onClick={() => handleCheckout(br.name)}
-                  className="px-2.5 py-1 rounded bg-vscode-input hover:bg-blue-600 hover:text-white border border-vscode-border text-xs font-medium text-gray-300 transition flex items-center gap-1"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Checkout</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+  const createTag = async () => {
+    if (!newName.trim()) return;
+    await executeGitOp('create-tag', {
+      name: newName.trim(),
+      targetHash: 'HEAD',
+      message: newTagMessage.trim() || undefined,
+    });
+    closeDialogs();
+    loadBranchesAndTags();
+  };
 
-        {/* Tags Tab */}
-        {tab === 'tags' && (
-          <div className="space-y-2">
-            {tags.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 text-xs">
-                No tags found in this repository.
-              </div>
-            ) : (
-              tags.map((tag) => (
-                <div
-                  key={tag.name}
-                  className="p-3 rounded-xl border border-vscode-border bg-vscode-sidebar/50 hover:bg-vscode-sidebar flex items-center justify-between gap-3 transition"
-                >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                      <TagIcon className="w-4 h-4" />
-                    </div>
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-xs text-amber-300 font-mono">
-                          {tag.name}
-                        </span>
-                        {tag.isAnnotated && (
-                          <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            Annotated
-                          </span>
-                        )}
-                      </div>
-                      {tag.message && (
-                        <p className="text-xs text-gray-300 mt-0.5">{tag.message}</p>
-                      )}
-                      <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5">
-                        <span className="font-mono text-blue-400">
-                          {tag.targetHash.substring(0, 7)}
-                        </span>
-                        {tag.taggerDate && (
-                          <span>· {new Date(tag.taggerDate).toLocaleDateString()}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+  const tabs = [
+    { id: 'local' as const, label: `Local (${localBranches.length})` },
+    { id: 'remote' as const, label: `Remote (${remoteBranches.length})` },
+    { id: 'tags' as const, label: `Tags (${tags.length})` },
+  ];
 
-                  <button
-                    onClick={() => selectCommit(tag.targetHash)}
-                    className="p-1.5 rounded hover:bg-blue-600/20 text-gray-400 hover:text-blue-400 transition"
-                    title="View Tagged Commit"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Create Branch Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-vscode-sidebar border border-vscode-border rounded-xl p-4 max-w-sm w-full shadow-2xl flex flex-col gap-3">
-            <h3 className="font-semibold text-sm text-gray-100 flex items-center gap-2">
-              <GitBranch className="w-4 h-4 text-blue-400" />
-              Create New Branch
-            </h3>
-            <p className="text-xs text-gray-400">
-              Create a new branch from current HEAD.
-            </p>
-            <input
-              type="text"
-              value={newBranchName}
-              onChange={(e) => setNewBranchName(e.target.value)}
-              placeholder="e.g. feature/auth-flow"
-              className="bg-vscode-input text-vscode-fg border border-vscode-inputBorder rounded px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-              autoFocus
-            />
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-3 py-1 text-xs text-gray-400 hover:text-white rounded hover:bg-vscode-hover"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateBranch}
-                disabled={!newBranchName.trim()}
-                className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded font-medium disabled:opacity-50"
-              >
-                Create Branch
-              </button>
-            </div>
-          </div>
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex items-center gap-2 pl-1 pr-3 border-b border-vscode-border bg-vscode-sidebar/60 shrink-0 flex-wrap">
+        <div className="flex items-center" role="tablist">
+          {tabs.map(({ id, label }) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={underlineTab(tab === id)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
+        <div className="relative flex-1 min-w-[140px] max-w-xs ml-auto">
+          <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={tab === 'tags' ? 'Filter tags' : 'Filter branches'}
+            aria-label="Filter"
+            className={`${textInput} pl-6`}
+          />
+        </div>
+        <button
+          onClick={() => (tab === 'tags' ? setShowTagDialog(true) : setShowBranchDialog(true))}
+          className={ghostButton}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          {tab === 'tags' ? 'New Tag' : 'New Branch'}
+        </button>
+      </div>
+
+      <div key={tab} className="flex-1 overflow-y-auto py-1 animate-in fade-in duration-150">
+        {tab !== 'tags' &&
+          (visibleBranches.length > 0 ? (
+            visibleBranches.map((branch) => <BranchRow key={branch.name} branch={branch} />)
+          ) : (
+            <EmptyState
+              icon={<GitBranch className="w-7 h-7" />}
+              title={query ? 'No matching branches' : `No ${tab} branches`}
+            />
+          ))}
+
+        {tab === 'tags' &&
+          (visibleTags.length > 0 ? (
+            visibleTags.map((tag) => (
+              <div
+                key={tag.name}
+                onClick={() => selectCommit(tag.targetHash)}
+                className={`${rowClass} cursor-pointer`}
+              >
+                <TagIcon className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="font-mono font-medium text-gray-100 truncate">{tag.name}</span>
+                    {tag.isAnnotated && (
+                      <span className="px-1 rounded text-[10px] bg-amber-500/15 text-amber-500 shrink-0">
+                        annotated
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-gray-400 truncate mt-0.5">
+                    <span className="font-mono">{tag.targetHash.substring(0, 7)}</span>
+                    {tag.taggerDate && <> · {new Date(tag.taggerDate).toLocaleDateString()}</>}
+                    {tag.message && <> · {tag.message}</>}
+                  </div>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            ))
+          ) : (
+            <EmptyState
+              icon={<TagIcon className="w-7 h-7" />}
+              title={query ? 'No matching tags' : 'No tags yet'}
+            />
+          ))}
+      </div>
+
+      {showBranchDialog && (
+        <Dialog
+          title="New branch"
+          icon={<GitBranch className="w-4 h-4 text-blue-500" />}
+          onClose={closeDialogs}
+        >
+          <p className="text-xs text-gray-400">Creates a branch from the current HEAD and switches to it.</p>
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && createBranch()}
+            placeholder="feature/auth-flow"
+            aria-label="Branch name"
+            className={`${textInput} font-mono`}
+            autoFocus
+          />
+          <DialogButtons
+            onCancel={closeDialogs}
+            onConfirm={createBranch}
+            label="Create Branch"
+            disabled={!newName.trim()}
+          />
+        </Dialog>
       )}
 
-      {/* Create Tag Modal */}
-      {showTagModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-vscode-sidebar border border-vscode-border rounded-xl p-4 max-w-sm w-full shadow-2xl flex flex-col gap-3">
-            <h3 className="font-semibold text-sm text-gray-100 flex items-center gap-2">
-              <TagIcon className="w-4 h-4 text-amber-400" />
-              Create Tag
-            </h3>
-            <input
-              type="text"
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
-              placeholder="Tag name (e.g. v1.0.0)"
-              className="bg-vscode-input text-vscode-fg border border-vscode-inputBorder rounded px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-              autoFocus
-            />
-            <textarea
-              value={newTagMessage}
-              onChange={(e) => setNewTagMessage(e.target.value)}
-              placeholder="Optional tag message (leave blank for lightweight tag)"
-              rows={2}
-              className="bg-vscode-input text-vscode-fg border border-vscode-inputBorder rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-            />
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                onClick={() => setShowTagModal(false)}
-                className="px-3 py-1 text-xs text-gray-400 hover:text-white rounded hover:bg-vscode-hover"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateTag}
-                disabled={!newTagName.trim()}
-                className="px-3 py-1 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded font-medium disabled:opacity-50"
-              >
-                Create Tag
-              </button>
-            </div>
-          </div>
-        </div>
+      {showTagDialog && (
+        <Dialog
+          title="New tag"
+          icon={<TagIcon className="w-4 h-4 text-amber-500" />}
+          onClose={closeDialogs}
+        >
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="v1.0.0"
+            aria-label="Tag name"
+            className={`${textInput} font-mono`}
+            autoFocus
+          />
+          <textarea
+            value={newTagMessage}
+            onChange={(e) => setNewTagMessage(e.target.value)}
+            placeholder="Optional message (leave blank for a lightweight tag)"
+            aria-label="Tag message"
+            rows={2}
+            className={`${textInput} resize-none`}
+          />
+          <DialogButtons
+            onCancel={closeDialogs}
+            onConfirm={createTag}
+            label="Create Tag"
+            disabled={!newName.trim()}
+          />
+        </Dialog>
       )}
     </div>
   );

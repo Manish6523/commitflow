@@ -27,7 +27,8 @@ Case-insensitive structured search that operates completely locally without requ
 - `hash:<sha>` — Match 7-40 hex SHA
 
 ### 3. Rich Commit Inspector & Diff Viewer
-- **Unified & Side-by-Side Diff Viewer**: Clean syntax coloring (additions in green, deletions in red, hunk headers in cyan), line number tracking, and single-click diff copying.
+- **Full-Page Diff Editor**: Monaco-powered split and inline diffs with syntax highlighting, word-level changes, collapsible unchanged regions and next/previous change navigation (F7 / Shift+F7).
+- **File History**: See every commit that changed a file, following renames. Click a commit to see its change, or mark any two versions as A and B to compare them, including your working copy.
 - **Changed Files Breakdown**: View all modified files with status codes (`A` Added, `M` Modified, `D` Deleted, `R` Renamed) and additions/deletions counts.
 - **Native VS Code Diff Integration**: Jump directly into VS Code's native diff editor with one click.
 - **Parent Navigation**: Click parent hashes to traverse merge commits and branching histories.
@@ -75,7 +76,7 @@ Case-insensitive structured search that operates completely locally without requ
 | `commitflow.refresh` | Refresh Repository | Refreshes repository metadata, commits, and branches |
 | `commitflow.search` | Search Commits | Focuses the search input in CommitFlow |
 | `commitflow.clearFilters` | Clear All Filters | Resets all active date, author, and branch filters |
-| `commitflow.openFileHistory` | Open File History | Opens commit history for current editor file |
+| `commitflow.openFileHistory` | Open File History | Opens commit history for the current editor file or an Explorer selection |
 | `commitflow.compareCommits` | Compare Commits | Opens the revision comparison workspace |
 | `commitflow.viewBranches` | View Branches & Tags | Opens the branch and tag explorer |
 | `commitflow.viewAnalytics` | View Analytics | Displays repository velocity and heatmaps |

@@ -51,17 +51,32 @@ class VsCodeApi {
     }
   }
 
-  public request<T = any>(message: any): Promise<T> {
+  public getState<T>(): T | undefined {
+    return this.vscode.getState();
+  }
+
+  public setState(state: unknown): void {
+    this.vscode.setState(state);
+  }
+
+  /** Send a message and wait for its reply. Rejects on an ERROR reply or timeout. */
+  public request<T = any>(message: any, timeoutMs: number = 30000): Promise<T> {
     const id = `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    return new Promise((resolve) => {
-      this.responseHandlers.set(id, (res) => resolve(res));
-      this.postMessage({ ...message, id });
-      // 10s fallback timeout
-      setTimeout(() => {
-        if (this.responseHandlers.has(id)) {
-          this.responseHandlers.delete(id);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.responseHandlers.delete(id);
+        reject(new Error(`Timed out waiting for ${message.type}`));
+      }, timeoutMs);
+
+      this.responseHandlers.set(id, (res) => {
+        clearTimeout(timer);
+        if (res.type === 'ERROR') {
+          reject(new Error(res.message));
+        } else {
+          resolve(res);
         }
-      }, 10000);
+      });
+      this.postMessage({ ...message, id });
     });
   }
 }

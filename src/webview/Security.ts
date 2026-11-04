@@ -11,6 +11,7 @@ export class Security {
       `img-src ${webviewCspSource} https: data: blob:`,
       `script-src ${webviewCspSource} 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline'`,
       `style-src ${webviewCspSource} 'unsafe-inline'`,
+      `worker-src blob:`,
       `font-src ${webviewCspSource} https: data:`,
       `connect-src ${webviewCspSource} https: data: blob:`,
     ].join('; ');

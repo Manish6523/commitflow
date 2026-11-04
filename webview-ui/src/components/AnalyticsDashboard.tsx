@@ -1,14 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useCommitStore } from '../stores/useCommitStore';
-import {
-  BarChart2,
-  Users,
-  GitBranch,
-  GitCommit,
-  TrendingUp,
-  FileCode2,
-  Calendar,
-} from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -19,16 +10,49 @@ import {
   CartesianGrid,
 } from 'recharts';
 
+const LEVEL_COLORS = [
+  'bg-gray-900',
+  'bg-emerald-500/30',
+  'bg-emerald-500/50',
+  'bg-emerald-500/75',
+  'bg-emerald-500',
+];
+
+// One heatmap column: a 12px cell plus its 4px gap.
+const WEEK_WIDTH = 16;
+const DAY_LABELS_WIDTH = 34;
+
+const axisTick = { fill: 'var(--vscode-descriptionForeground, #999999)', fontSize: 10 };
+const axisLine = 'var(--vscode-panel-border, #333333)';
+
+const Stat: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="px-4 py-3 min-w-0">
+    <div className="text-[11px] text-gray-400 truncate">{label}</div>
+    <div className="text-xl font-semibold text-gray-100 tabular-nums mt-0.5">{value}</div>
+  </div>
+);
+
+const Section: React.FC<{ title: string; hint?: string; children: React.ReactNode }> = ({
+  title,
+  hint,
+  children,
+}) => (
+  <section className="px-4 py-3 border-b border-vscode-border min-w-0">
+    <div className="flex items-center justify-between gap-3 mb-2">
+      <h4 className="text-xs font-semibold text-gray-200">{title}</h4>
+      {hint && <span className="text-[11px] text-gray-400 truncate">{hint}</span>}
+    </div>
+    {children}
+  </section>
+);
+
+const rankedRow =
+  'flex items-center gap-2 -mx-2 px-2 py-1 rounded-md cursor-pointer text-xs hover:bg-vscode-hover transition-colors duration-100';
+
 export const AnalyticsDashboard: React.FC = () => {
   const { analytics, loadingAnalytics, setFilters, setViewMode } = useCommitStore();
 
-  const LEVEL_COLORS = [
-    'bg-[#1e293b]/70 border-[#334155]/40', // 0
-    'bg-emerald-900/80 border-emerald-700/50', // 1
-    'bg-emerald-700 border-emerald-500/60', // 2
-    'bg-emerald-500 border-emerald-400', // 3
-    'bg-emerald-300 border-white', // 4
-  ];
+  const heatmapRef = useRef<HTMLDivElement>(null);
 
   const handleHeatmapDateClick = (date: string) => {
     setFilters({ since: date, until: date });
@@ -74,11 +98,27 @@ export const AnalyticsDashboard: React.FC = () => {
     return { weeks, monthLabels };
   }, [analytics?.activityHeatmap]);
 
+  // The newest weeks are the ones people look for, so start at the right edge.
+  useEffect(() => {
+    const heatmap = heatmapRef.current;
+    if (heatmap) heatmap.scrollLeft = heatmap.scrollWidth;
+  }, [heatmapGrid, loadingAnalytics]);
+
   if (loadingAnalytics || !analytics) {
     return (
-      <div className="flex flex-col items-center justify-center h-full py-16 text-gray-400 gap-2">
-        <BarChart2 className="w-8 h-8 animate-pulse text-blue-400" />
-        <span className="text-xs">Calculating repository analytics and velocity...</span>
+      <div aria-label="Loading analytics">
+        <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-vscode-border border-b border-vscode-border">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="px-4 py-3 space-y-2">
+              <div className="cf-skeleton rounded h-2.5 w-1/2" />
+              <div className="cf-skeleton rounded h-5 w-1/3" />
+            </div>
+          ))}
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="cf-skeleton rounded h-24 w-full" />
+          <div className="cf-skeleton rounded h-48 w-full" />
+        </div>
       </div>
     );
   }
@@ -93,112 +133,56 @@ export const AnalyticsDashboard: React.FC = () => {
   } = analytics;
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto p-4 max-w-6xl mx-auto w-full space-y-6 select-none">
-      {/* Overview Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/50 flex items-center justify-between shadow-sm">
-          <div>
-            <span className="text-xs text-gray-400 font-medium">Total Commits</span>
-            <h3 className="text-2xl font-bold text-gray-100 mt-1 font-mono">
-              {totalCommits.toLocaleString()}
-            </h3>
-          </div>
-          <div className="p-3 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            <GitCommit className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/50 flex items-center justify-between shadow-sm">
-          <div>
-            <span className="text-xs text-gray-400 font-medium">Active Contributors</span>
-            <h3 className="text-2xl font-bold text-gray-100 mt-1 font-mono">
-              {activeContributors}
-            </h3>
-          </div>
-          <div className="p-3 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
-            <Users className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/50 flex items-center justify-between shadow-sm">
-          <div>
-            <span className="text-xs text-gray-400 font-medium">Active Branches</span>
-            <h3 className="text-2xl font-bold text-gray-100 mt-1 font-mono">
-              {branchCount}
-            </h3>
-          </div>
-          <div className="p-3 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <GitBranch className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/50 flex items-center justify-between shadow-sm">
-          <div>
-            <span className="text-xs text-gray-400 font-medium">Avg Commits / Day</span>
-            <h3 className="text-2xl font-bold text-emerald-400 mt-1 font-mono">
-              {(totalCommits / Math.max(1, dailyActivity.length)).toFixed(1)}
-            </h3>
-          </div>
-          <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-        </div>
+    <div className="h-full overflow-y-auto">
+      <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-vscode-border border-b border-vscode-border bg-vscode-sidebar/30 [&>*:nth-child(3)]:border-l-0 lg:[&>*:nth-child(3)]:border-l">
+        <Stat label="Total commits" value={totalCommits.toLocaleString()} />
+        <Stat label="Active contributors" value={activeContributors} />
+        <Stat label="Active branches" value={branchCount} />
+        <Stat
+          label="Avg commits / day"
+          value={(totalCommits / Math.max(1, dailyActivity.length)).toFixed(1)}
+        />
       </div>
 
-      {/* 52-Week True GitHub-style Activity Heatmap (7 Rows x 52 Columns) */}
-      <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/40 shadow-sm flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h4 className="font-semibold text-xs text-gray-200 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-emerald-400" />
-            Commit Activity Heatmap (Last 365 Days)
-          </h4>
-          <span className="text-[11px] text-gray-400">Click a cell to filter commits for that day</span>
-        </div>
-
-        <div className="overflow-x-auto pb-2">
-          <div className="min-w-[760px] flex flex-col gap-1">
-            {/* Month Labels */}
-            <div className="flex pl-8 text-[10px] text-gray-400 font-sans h-4 relative">
-              {heatmapGrid.monthLabels.map((m, idx) => (
+      <Section title="Commit activity, last 365 days" hint="Click a day to filter commits">
+        <div ref={heatmapRef} className="overflow-x-auto pb-2">
+          <div className="w-max flex flex-col gap-1">
+            <div className="relative h-4 text-[10px] text-gray-400">
+              {heatmapGrid.monthLabels.map((month, index) => (
                 <span
-                  key={idx}
-                  style={{ left: `${m.colIndex * 14 + 32}px` }}
-                  className="absolute font-medium"
+                  key={index}
+                  style={{ left: month.colIndex * WEEK_WIDTH + DAY_LABELS_WIDTH }}
+                  className="absolute"
                 >
-                  {m.label}
+                  {month.label}
                 </span>
               ))}
             </div>
 
-            {/* Grid with Weekday Labels on the left and 7 rows */}
             <div className="flex items-start gap-1.5">
-              {/* Day Labels */}
-              <div className="flex flex-col gap-1 text-[9px] text-gray-500 font-mono pr-1 select-none">
-                <span className="h-3 leading-3">Sun</span>
-                <span className="h-3 leading-3">Mon</span>
-                <span className="h-3 leading-3">Tue</span>
-                <span className="h-3 leading-3">Wed</span>
-                <span className="h-3 leading-3">Thu</span>
-                <span className="h-3 leading-3">Fri</span>
-                <span className="h-3 leading-3">Sat</span>
+              <div className="flex flex-col gap-1 w-7 text-[9px] text-gray-500">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                  <span key={day} className="h-3 leading-3">
+                    {day}
+                  </span>
+                ))}
               </div>
 
-              {/* Weekly Columns */}
-              <div className="flex gap-1 flex-1">
-                {heatmapGrid.weeks.map((week, wIdx) => (
-                  <div key={wIdx} className="flex flex-col gap-1">
-                    {/* Render days 0 through 6 */}
-                    {[0, 1, 2, 3, 4, 5, 6].map((dayNum) => {
-                      const day = week.find((d) => d.dayOfWeek === dayNum);
+              <div className="flex gap-1">
+                {heatmapGrid.weeks.map((week, weekIndex) => (
+                  <div key={weekIndex} className="flex flex-col gap-1">
+                    {[0, 1, 2, 3, 4, 5, 6].map((dayNumber) => {
+                      const day = week.find((d) => d.dayOfWeek === dayNumber);
                       if (!day) {
-                        return <div key={dayNum} className="w-3 h-3 rounded-sm opacity-0" />;
+                        return <div key={dayNumber} className="w-3 h-3" />;
                       }
                       return (
                         <button
                           key={day.date}
                           onClick={() => handleHeatmapDateClick(day.date)}
                           title={`${day.date}: ${day.count} commit${day.count === 1 ? '' : 's'}`}
-                          className={`w-3 h-3 rounded-sm border transition hover:scale-125 hover:z-20 ${
+                          aria-label={`${day.date}: ${day.count} commits`}
+                          className={`w-3 h-3 rounded-sm transition-transform duration-100 hover:scale-125 ${
                             LEVEL_COLORS[day.level]
                           }`}
                         />
@@ -211,121 +195,92 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center justify-end gap-1.5 text-[10px] text-gray-400 pt-1">
-          <span>Less</span>
-          {LEVEL_COLORS.map((c, i) => (
-            <div key={i} className={`w-3 h-3 rounded-sm border ${c}`} />
+        <div className="flex items-center justify-end gap-1 text-[10px] text-gray-400 pt-1">
+          <span className="mr-0.5">Less</span>
+          {LEVEL_COLORS.map((color) => (
+            <div key={color} className={`w-3 h-3 rounded-sm ${color}`} />
           ))}
-          <span>More</span>
+          <span className="ml-0.5">More</span>
         </div>
-      </div>
+      </Section>
 
-      {/* Daily Commit Velocity Chart */}
-      <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/40 shadow-sm flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h4 className="font-semibold text-xs text-gray-200 flex items-center gap-2">
-            <BarChart2 className="w-4 h-4 text-blue-400" />
-            Daily Commit Velocity (Last 30 Days)
-          </h4>
-        </div>
-
-        <div className="h-56 w-full pt-2">
+      <Section title="Daily commits, last 30 days">
+        <div className="h-52 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dailyActivity}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} />
+            <BarChart data={dailyActivity} margin={{ top: 8, right: 0, bottom: 0, left: -24 }}>
+              <CartesianGrid stroke={axisLine} strokeOpacity={0.5} vertical={false} />
               <XAxis
                 dataKey="date"
-                stroke="#888888"
-                fontSize={10}
-                tickFormatter={(val) => val.slice(5)}
+                stroke={axisLine}
+                tick={axisTick}
+                tickLine={false}
+                tickFormatter={(value) => value.slice(5)}
               />
-              <YAxis stroke="#888888" fontSize={10} allowDecimals={false} />
+              <YAxis stroke={axisLine} tick={axisTick} tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip
+                cursor={{ fill: 'var(--vscode-list-hoverBackground, #2a2d2e)' }}
                 contentStyle={{
                   backgroundColor: 'var(--vscode-sideBar-background, #252526)',
-                  borderColor: 'var(--vscode-panel-border, #333333)',
-                  borderRadius: '8px',
+                  borderColor: axisLine,
+                  borderRadius: '6px',
+                  color: 'var(--vscode-foreground, #cccccc)',
                   fontSize: '11px',
                 }}
+                itemStyle={{ color: 'var(--vscode-foreground, #cccccc)' }}
               />
-              <Bar dataKey="commits" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="commits" fill="#3b82f6" radius={[3, 3, 0, 0]} maxBarSize={36} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      </Section>
 
-      {/* Bottom Grid: Contributor Leaderboard & Top Modified Files */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Contributor Leaderboard */}
-        <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/40 shadow-sm flex flex-col gap-3">
-          <h4 className="font-semibold text-xs text-gray-200 flex items-center gap-2">
-            <Users className="w-4 h-4 text-purple-400" />
-            Top Contributors
-          </h4>
-
-          <div className="space-y-2 overflow-y-auto max-h-64">
-            {contributorStats.map((contrib, idx) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x divide-vscode-border">
+        <Section title="Top contributors">
+          <div className="max-h-64 overflow-y-auto">
+            {contributorStats.map((contributor, index) => (
               <div
-                key={contrib.email || contrib.name}
+                key={contributor.email || contributor.name}
                 onClick={() => {
-                  setFilters({ authors: [contrib.name] });
+                  setFilters({ authors: [contributor.name] });
                   setViewMode('grid');
                 }}
-                className="p-2.5 rounded-lg border border-vscode-border bg-vscode-sidebar/60 hover:bg-vscode-hover flex items-center justify-between cursor-pointer transition"
+                className={rankedRow}
               >
-                <div className="flex items-center gap-2.5 overflow-hidden">
-                  <span className="font-mono text-xs font-bold text-gray-500 w-4">
-                    #{idx + 1}
-                  </span>
-                  <div className="flex flex-col overflow-hidden">
-                    <span className="text-xs font-semibold text-gray-100 truncate">
-                      {contrib.name}
-                    </span>
-                    <span className="text-[11px] text-gray-400 truncate font-mono">
-                      {contrib.email}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0 font-mono text-xs">
-                  <span className="text-blue-400 font-bold">{contrib.commitCount}</span>
-                  <span className="text-[10px] text-gray-500 ml-1">commits</span>
-                </div>
+                <span className="w-4 shrink-0 text-[11px] text-gray-500 tabular-nums">{index + 1}</span>
+                <span className="flex-1 min-w-0 truncate">
+                  <span className="font-medium text-gray-200">{contributor.name}</span>{' '}
+                  <span className="text-[11px] text-gray-400">{contributor.email}</span>
+                </span>
+                <span className="shrink-0 font-mono text-[11px] tabular-nums text-gray-300">
+                  {contributor.commitCount}
+                </span>
               </div>
             ))}
           </div>
-        </div>
+        </Section>
 
-        {/* Top Modified Files */}
-        <div className="p-4 rounded-xl border border-vscode-border bg-vscode-sidebar/40 shadow-sm flex flex-col gap-3">
-          <h4 className="font-semibold text-xs text-gray-200 flex items-center gap-2">
-            <FileCode2 className="w-4 h-4 text-amber-400" />
-            Most Frequently Modified Files
-          </h4>
-
-          <div className="space-y-2 overflow-y-auto max-h-64">
-            {topFiles.map((file, idx) => (
+        <Section title="Most changed files">
+          <div className="max-h-64 overflow-y-auto">
+            {topFiles.map((file, index) => (
               <div
                 key={file.path}
                 onClick={() => {
                   setFilters({ filePath: file.path });
                   setViewMode('grid');
                 }}
-                className="p-2.5 rounded-lg border border-vscode-border bg-vscode-sidebar/60 hover:bg-vscode-hover flex items-center justify-between cursor-pointer transition text-xs font-mono"
+                className={rankedRow}
               >
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="text-gray-500 w-4 font-bold text-[11px]">#{idx + 1}</span>
-                  <span className="truncate text-gray-200">{file.path}</span>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-amber-400 font-semibold">{file.changes}</span>
-                  <span className="text-[10px] text-gray-500 ml-1">edits</span>
-                </div>
+                <span className="w-4 shrink-0 text-[11px] text-gray-500 tabular-nums">{index + 1}</span>
+                <span className="flex-1 min-w-0 truncate text-gray-200" title={file.path}>
+                  {file.path}
+                </span>
+                <span className="shrink-0 font-mono text-[11px] tabular-nums text-gray-300">
+                  {file.changes}
+                </span>
               </div>
             ))}
           </div>
-        </div>
+        </Section>
       </div>
     </div>
   );

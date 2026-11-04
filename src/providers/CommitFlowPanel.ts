@@ -5,6 +5,7 @@ import { MessageHandler } from '../webview/MessageHandler';
 import { StorageService } from '../services/StorageService';
 import { AIService } from '../services/AIService';
 import { Security } from '../webview/Security';
+import { ExtensionMessage } from '../types/protocol';
 
 export class CommitFlowPanel {
   public static currentPanel: CommitFlowPanel | undefined;
@@ -12,6 +13,8 @@ export class CommitFlowPanel {
   private readonly extensionUri: vscode.Uri;
   private disposables: vscode.Disposable[] = [];
   public readonly messageHandler: MessageHandler;
+  private webviewReady = false;
+  private pendingMessages: ExtensionMessage[] = [];
 
   public static createOrShow(
     extensionUri: vscode.Uri,
@@ -74,13 +77,32 @@ export class CommitFlowPanel {
 
     // Listen for messages from the webview
     this.panel.webview.onDidReceiveMessage(
-      (message) => this.messageHandler.handleMessage(message),
+      (message) => {
+        if (message?.type === 'WEBVIEW_READY') {
+          this.webviewReady = true;
+          this.pendingMessages.splice(0).forEach((m) => this.panel.webview.postMessage(m));
+          return;
+        }
+        this.messageHandler.handleMessage(message);
+      },
       null,
       this.disposables
     );
 
     // Handle disposal
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+  }
+
+  /**
+   * Send a message to the webview, holding it until the app has mounted so a
+   * command that opens the dashboard does not lose it.
+   */
+  public postToWebview(message: ExtensionMessage): void {
+    if (this.webviewReady) {
+      this.panel.webview.postMessage(message);
+    } else {
+      this.pendingMessages.push(message);
+    }
   }
 
   public reveal(): void {

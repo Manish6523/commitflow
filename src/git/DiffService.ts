@@ -1,6 +1,6 @@
 import { GitProcess } from './GitProcess';
 import { CommitComparisonResult, FileChange } from '../types/git';
-import { CommitService } from './CommitService';
+import { parseRawNumstatZ } from './parseChanges';
 
 export class DiffService {
   /**
@@ -28,10 +28,10 @@ export class DiffService {
 
     // 2. Changed files and numstat between base and target
     const numstatRes = await GitProcess.exec(
-      ['diff', '--numstat', '--name-status', `${baseCommit}..${targetCommit}`],
+      ['diff', '--raw', '--numstat', '-z', `${baseCommit}..${targetCommit}`],
       { cwd: repoRoot }
     );
-    const files: FileChange[] = CommitService.parseNumstatAndStatus(numstatRes.stdout);
+    const files: FileChange[] = parseRawNumstatZ(numstatRes.stdout);
 
     let totalInsertions = 0;
     let totalDeletions = 0;

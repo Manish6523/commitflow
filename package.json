@@ -87,7 +87,8 @@
       {
         "command": "commitflow.openFileHistory",
         "title": "CommitFlow: Open File History",
-        "category": "CommitFlow"
+        "category": "CommitFlow",
+        "icon": "$(history)"
       },
       {
         "command": "commitflow.viewBranches",
@@ -148,6 +149,13 @@
           "command": "commitflow.openFileHistory",
           "group": "navigation",
           "when": "resourceScheme == file"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "commitflow.openFileHistory",
+          "group": "7_modification",
+          "when": "resourceScheme == file && !explorerResourceIsFolder"
         }
       ],
       "commandPalette": [
