@@ -7,7 +7,7 @@
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/commitflow/commitflow"
+    "url": "https://github.com/Manish6523/commitflow"
   },
   "engines": {
     "vscode": "^1.85.0"
