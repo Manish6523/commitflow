@@ -21,7 +21,7 @@ describe('Real Repository Git Integration', () => {
   });
 
   it('should retrieve commits with accurate metadata and merge detection', async () => {
-    const res = await CommitService.getCommits(repoRoot, { pageSize: 10 });
+    const res = await CommitService.getCommits(repoRoot, { pageSize: 100 });
     expect(res.commits.length).toBeGreaterThan(0);
     expect(res.totalCount).toBeGreaterThanOrEqual(5);
 
