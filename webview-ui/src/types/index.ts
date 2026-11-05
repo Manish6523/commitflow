@@ -76,6 +76,7 @@ export interface RepositoryInfo {
 
 export interface CommitFilterOptions {
   authors?: string[];
+  committers?: string[];
   excludeAuthors?: string[];
   since?: string;
   until?: string;
@@ -108,6 +109,16 @@ export interface FileContent {
   exists: boolean;
   isBinary: boolean;
   tooLarge: boolean;
+}
+
+export type AIProvider = 'openai' | 'anthropic' | 'gemini' | 'custom';
+
+export interface AIStatus {
+  enabled: boolean;
+  provider: AIProvider;
+  model: string;
+  baseUrl: string;
+  hasKey: boolean;
 }
 
 /** One version of a file in a diff. A null side means the file doesn't exist there. */

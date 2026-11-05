@@ -2,7 +2,7 @@
   "name": "commitflow",
   "displayName": "CommitFlow",
   "description": "Visual Git Commit Explorer, Repository Manager, Diff Inspector & Analytics for VS Code",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "commitflow",
   "icon": "media/icon.png",
   "repository": {
@@ -126,6 +126,11 @@
         "category": "CommitFlow"
       },
       {
+        "command": "commitflow.configureAI",
+        "title": "CommitFlow: Configure AI",
+        "category": "CommitFlow"
+      },
+      {
         "command": "commitflow.openSettings",
         "title": "CommitFlow: Open Settings",
         "category": "CommitFlow"
@@ -202,6 +207,9 @@
           "command": "commitflow.createTag"
         },
         {
+          "command": "commitflow.configureAI"
+        },
+        {
           "command": "commitflow.openSettings"
         }
       ]
@@ -239,7 +247,7 @@
         "commitflow.enableAI": {
           "type": "boolean",
           "default": false,
-          "description": "Enable optional AI-powered commit explanations and smart search. Disabled by default."
+          "description": "Use your AI provider for AI Insights and Smart Search. Add your API key with the CommitFlow: Configure AI command. Commit messages, file names and diffs are sent to the provider. Disabled by default."
         },
         "commitflow.aiProvider": {
           "type": "string",
@@ -250,7 +258,17 @@
             "custom"
           ],
           "default": "openai",
-          "description": "Configured AI provider for commit intelligence."
+          "description": "AI provider for commit intelligence. Use custom for any OpenAI-compatible server."
+        },
+        "commitflow.aiModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model ID to use. Chosen automatically when you add an API key."
+        },
+        "commitflow.aiBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL of an OpenAI-compatible server, such as http://localhost:11434/v1. Only used by the custom provider."
         }
       }
     }

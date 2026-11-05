@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { useCommitStore } from '../stores/useCommitStore';
 import {
   Search,
@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { vscode } from '../vscode';
+import { applyOperator, matchingOperators } from '../utils/searchSuggestions';
 import { Dialog, DialogButtons } from './ui/Dialog';
 import { ghostButton, iconButton, inlineSelect, textInput } from './ui/styles';
 
@@ -33,31 +34,49 @@ export const SearchBar: React.FC = () => {
     savedFilters,
     saveCurrentFilter,
     totalCount,
+    setViewMode,
   } = useCommitStore();
 
   const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [aiSearching, setAiSearching] = useState(false);
   const [showAiDialog, setShowAiDialog] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
+  const [aiWarning, setAiWarning] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const operators = [
-    { label: 'author:', desc: 'Filter by author name (e.g. author:manish)' },
-    { label: 'message:', desc: 'Search commit message body (e.g. message:feat)' },
-    { label: 'after:', desc: 'Commits after date (e.g. after:2026-10-01)' },
-    { label: 'before:', desc: 'Commits before date (e.g. before:2026-11-01)' },
-    { label: 'file:', desc: 'Commits modifying file path (e.g. file:src/index.ts)' },
-    { label: 'is:merge', desc: 'Show only merge commits' },
-    { label: 'hash:', desc: 'Find specific commit hash' },
-  ];
+  const suggestions = useMemo(() => matchingOperators(searchQuery), [searchQuery]);
+  const showSuggestions = showAutocomplete && suggestions.length > 0;
 
-  const handleOperatorClick = (op: string) => {
-    const newQuery = searchQuery ? `${searchQuery.trim()} ${op}` : op;
-    setSearchQuery(newQuery);
-    setShowAutocomplete(false);
+  const acceptSuggestion = (label: string) => {
+    setSearchQuery(applyOperator(searchQuery, label));
+    setActiveSuggestion(-1);
     inputRef.current?.focus();
+  };
+
+  const onSearchKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      setShowAutocomplete(false);
+      return;
+    }
+    if (!showSuggestions) {
+      if (event.key === 'ArrowDown') setShowAutocomplete(true);
+      return;
+    }
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      setActiveSuggestion((i) => (i + step + suggestions.length) % suggestions.length);
+    } else if (event.key === 'Tab' && searchQuery && !searchQuery.endsWith(' ')) {
+      event.preventDefault();
+      acceptSuggestion(suggestions[Math.max(activeSuggestion, 0)].label);
+    } else if (event.key === 'Enter' && activeSuggestion >= 0) {
+      event.preventDefault();
+      acceptSuggestion(suggestions[activeSuggestion].label);
+    }
   };
 
   const handleDatePreset = (preset: string) => {
@@ -91,13 +110,14 @@ export const SearchBar: React.FC = () => {
     setAiPrompt('');
     setAiSearching(true);
     try {
-      const res = await vscode.request<{ result?: { query: string } }>(
+      const res = await vscode.request<{ result?: { query: string; warning?: string } }>(
         { type: 'AI_ACTION', action: 'nl_search', payload: { prompt } },
         120000
       );
       if (res?.result?.query) {
         setSearchQuery(res.result.query);
       }
+      setAiWarning(res?.result?.warning ?? '');
     } catch {
       // The extension reports failures through the toast.
     } finally {
@@ -112,7 +132,9 @@ export const SearchBar: React.FC = () => {
     (filters.isMerge !== undefined ? 1 : 0) +
     (filters.filePath ? 1 : 0);
 
-  const hasChips = Boolean(filters.since || filters.until || filters.filePath) || filters.isMerge !== undefined;
+  const hasChips =
+    Boolean(filters.since || filters.until || filters.filePath || filters.authors?.length) ||
+    filters.isMerge !== undefined;
 
   const closeSaveDialog = () => {
     setShowSaveModal(false);
@@ -135,10 +157,15 @@ export const SearchBar: React.FC = () => {
             ref={inputRef}
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setShowAutocomplete(true);
+              setActiveSuggestion(-1);
+            }}
             onFocus={() => setShowAutocomplete(true)}
-            onKeyDown={(e) => e.key === 'Escape' && setShowAutocomplete(false)}
-            placeholder="Search commits, or try author:ada after:2026-10-01 is:merge"
+            onBlur={() => setShowAutocomplete(false)}
+            onKeyDown={onSearchKeyDown}
+            placeholder="Search messages, authors and hashes, or try author:ada file:src is:merge"
             aria-label="Search commits"
             className={`${textInput} pl-6 pr-14`}
           />
@@ -154,7 +181,11 @@ export const SearchBar: React.FC = () => {
               </button>
             )}
             <button
-              onClick={() => setShowAutocomplete(!showAutocomplete)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setShowAutocomplete(!showAutocomplete);
+                inputRef.current?.focus();
+              }}
               title="Search operators"
               className="px-1 rounded text-[10px] font-mono text-gray-400 hover:text-vscode-fg hover:bg-vscode-hover transition-colors"
             >
@@ -162,16 +193,23 @@ export const SearchBar: React.FC = () => {
             </button>
           </div>
 
-          {showAutocomplete && (
+          {showSuggestions && (
             <div
+              role="listbox"
+              aria-label="Search operators"
+              onMouseDown={(event) => event.preventDefault()}
               className="absolute left-0 right-0 top-full mt-1 z-40 p-1 max-h-64 overflow-y-auto rounded-xl border border-vscode-border bg-vscode-sidebar shadow-xl animate-in fade-in slide-in-from-top-1 duration-150"
-              onMouseLeave={() => setShowAutocomplete(false)}
             >
-              {operators.map((op) => (
+              {suggestions.map((op, index) => (
                 <button
                   key={op.label}
-                  onClick={() => handleOperatorClick(op.label)}
-                  className="w-full flex items-center justify-between gap-3 px-2 py-1 rounded-md text-left text-xs hover:bg-vscode-hover transition-colors"
+                  role="option"
+                  aria-selected={index === activeSuggestion}
+                  onClick={() => acceptSuggestion(op.label)}
+                  onMouseMove={() => setActiveSuggestion(index)}
+                  className={`w-full flex items-center justify-between gap-3 px-2 py-1 rounded-md text-left text-xs transition-colors ${
+                    index === activeSuggestion ? 'bg-vscode-hover' : ''
+                  }`}
                 >
                   <span className="font-mono font-medium text-blue-500">{op.label}</span>
                   <span className="text-[11px] text-gray-400 truncate">{op.desc}</span>
@@ -273,6 +311,13 @@ export const SearchBar: React.FC = () => {
 
       {hasChips && (
         <div className="flex items-center gap-1 flex-wrap">
+          {filters.authors?.map((author) => (
+            <FilterChip
+              key={author}
+              label={`Author ${author}`}
+              onRemove={() => setFilters({ authors: filters.authors?.filter((a) => a !== author) })}
+            />
+          ))}
           {filters.since && (
             <FilterChip label={`Since ${filters.since}`} onRemove={() => setFilters({ since: undefined })} />
           )}
@@ -288,6 +333,15 @@ export const SearchBar: React.FC = () => {
           {filters.filePath && (
             <FilterChip label={filters.filePath} onRemove={() => setFilters({ filePath: undefined })} />
           )}
+        </div>
+      )}
+
+      {aiWarning && (
+        <div role="alert" className="flex items-center justify-between gap-2 text-[11px] text-amber-500">
+          <span>{aiWarning}</span>
+          <button onClick={() => setAiWarning('')} className="p-0.5 rounded hover:bg-vscode-hover" aria-label="Dismiss">
+            <X className="w-3 h-3" />
+          </button>
         </div>
       )}
 
@@ -321,11 +375,23 @@ export const SearchBar: React.FC = () => {
           icon={<Sparkles className="w-4 h-4 text-purple-500" />}
           onClose={() => setShowAiDialog(false)}
         >
+          <p className="text-xs text-gray-400">
+            Describe the commits you want.{' '}
+            <button
+              onClick={() => {
+                setShowAiDialog(false);
+                setViewMode('settings');
+              }}
+              className="text-blue-500 hover:underline"
+            >
+              AI settings
+            </button>
+          </p>
           <input
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAiNaturalLanguageSearch()}
-            placeholder="commits by alex last week fixing auth"
+            placeholder="what did alex change in auth last week"
             aria-label="Describe the commits you want"
             className={textInput}
             autoFocus

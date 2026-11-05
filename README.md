@@ -17,14 +17,17 @@ Explore your entire repository history, search commits with GitHub-style operato
 - **Graph View**: Interactive SVG Git DAG visualization with real parent-child relationship swimlanes, merge nodes, branch heads, and zoom/pan controls.
 
 ### 2. Powerful Search & Operator Engine
-Case-insensitive structured search that operates completely locally without requiring external services or cloud APIs:
-- `author:<name>` — Filter by commit author (e.g., `author:manish`)
+Plain words must all appear, in any order, across messages, authors, emails, branch and tag names, and hashes. Put a phrase in quotes to keep it together. Everything runs locally, and these operators narrow the results:
+- `author:<name>` / `committer:<name>` — Filter by name or email (e.g., `author:manish`)
 - `message:<query>` — Search commit subject and body (e.g., `message:authentication`)
-- `after:<YYYY-MM-DD>` / `since:` — Commits created after a date
-- `before:<YYYY-MM-DD>` / `until:` — Commits created before a date
-- `file:<path>` — Commits modifying a specific file
+- `after:<YYYY-MM-DD>` / `since:` — Commits on or after a date
+- `before:<YYYY-MM-DD>` / `until:` — Commits on or before a date
+- `file:<path>` — Part of a path, a folder, or a glob like `*.tsx`
+- `branch:<name>` — Commits on a branch
+- `tag:<name>` — Commits with a matching tag
+- `code:<text>` — Commits that added or removed this text
 - `is:merge` / `is:non-merge` — Filter merge commits
-- `hash:<sha>` — Match 7-40 hex SHA
+- `hash:<sha>` — Find a commit by full or short hash, on any branch
 
 ### 3. Rich Commit Inspector & Diff Viewer
 - **Full-Page Diff Editor**: Monaco-powered split and inline diffs with syntax highlighting, word-level changes, collapsible unchanged regions and next/previous change navigation (F7 / Shift+F7).
@@ -49,11 +52,12 @@ Case-insensitive structured search that operates completely locally without requ
 - **Contributor Leaderboard**: Rankings by total commits, first/last activity dates, and line churn.
 - **Frequently Modified Files**: Identifies hotspots and high-churn code paths across history.
 
-### 7. Optional AI Intelligence (Local-First & Private)
-- **Commit Impact Summary**: Automated evaluation of blast radius, configuration impacts, and risk factors (*Low*, *Medium*, *High*).
-- **Natural Language Search Translation**: Convert queries like *"commits by alex last week fixing auth"* into structured operators.
-- **Automated Release Notes Generator**: Categorize commits into Features, Bug Fixes, and Maintenance.
-- **Strict Privacy**: Operates offline by default with local heuristics. External API keys are stored exclusively in VS Code `SecretStorage`. No source code is transmitted in the background.
+### 7. Optional AI with Your Own API Key
+Open the gear icon in the dashboard, or run **CommitFlow: Configure AI**, then pick a provider and paste your key. OpenAI, Anthropic, Google Gemini and any OpenAI-compatible server (including local ones like Ollama) are supported.
+- **AI Insights**: A real review of a commit's purpose, key changes and risks.
+- **Smart Search**: Describe what you're looking for, and it becomes a search query.
+- **Works without a key**: CommitFlow falls back to basic built-in analysis, with nothing sent anywhere.
+- **Privacy**: Keys are stored in VS Code's encrypted `SecretStorage`. When AI is on, commit messages, file names and diffs are sent to the provider you chose, only when you open AI Insights or use Smart Search. Files like `.env` and private keys are left out of diffs.
 
 ---
 
@@ -99,7 +103,9 @@ Customize CommitFlow in VS Code Settings (`Ctrl+,`):
   "commitflow.defaultViewMode": "grid",
   "commitflow.dateFormat": "relative",
   "commitflow.enableAI": false,
-  "commitflow.aiProvider": "openai"
+  "commitflow.aiProvider": "openai",
+  "commitflow.aiModel": "",
+  "commitflow.aiBaseUrl": ""
 }
 ```
 
@@ -109,7 +115,7 @@ Customize CommitFlow in VS Code Settings (`Ctrl+,`):
 
 - **Safe Process Execution**: All Git commands execute via bounded argument arrays (`execFile`) rather than shell interpolation, eliminating command injection vulnerabilities.
 - **Strict Content Security Policy (CSP)**: The Webview enforces strict nonces, restricted local resource roots, and prevents untrusted script execution.
-- **Local-First Architecture**: Your Git repository remains the single source of truth. No accounts or telemetry services required.
+- **Local-First Architecture**: Your Git repository remains the single source of truth. No accounts or telemetry services required, and nothing leaves your machine unless you turn on AI with your own key.
 
 ---
 

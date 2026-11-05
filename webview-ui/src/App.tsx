@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useCommitStore } from './stores/useCommitStore';
+import { isLatestCommitQuery, useCommitStore } from './stores/useCommitStore';
 import { Header } from './components/Header';
 import { SearchBar } from './components/SearchBar';
 import { CommitCard } from './components/CommitCard';
@@ -11,6 +11,7 @@ import { CommitCompareView } from './components/CommitCompareView';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { CommitDetailPage } from './components/CommitDetailPage';
 import { FileHistoryView } from './components/FileHistoryView';
+import { SettingsView } from './components/SettingsView';
 import { CommitCardsSkeleton, CommitRowsSkeleton } from './components/ui/Skeletons';
 import { EmptyState } from './components/ui/EmptyState';
 import { ConfirmDialog } from './components/ui/Dialog';
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
     viewMode,
     selectedCommitDetails,
     loadingDetails,
+    searchQuery,
   } = useCommitStore();
 
   const [notification, setNotification] = useState<{
@@ -73,6 +75,7 @@ export const App: React.FC = () => {
 
         case 'COMMITS_LOADED':
         case 'SEARCH_RESULTS': {
+          if (!isLatestCommitQuery(msg.seq)) break;
           useCommitStore.setState({
             commits: msg.commits,
             totalCount: msg.totalCount,
@@ -184,8 +187,8 @@ export const App: React.FC = () => {
     ) : (
       <EmptyState
         icon={<GitCommit className="w-8 h-8" />}
-        title="No commits found"
-        detail="Try adjusting your search query or filters."
+        title={searchQuery.trim() ? 'No commits match your search' : 'No commits found'}
+        detail="Try fewer words, or adjust your filters."
       />
     );
   };
@@ -242,6 +245,8 @@ export const App: React.FC = () => {
             {viewMode === 'compare' && <CommitCompareView />}
 
             {viewMode === 'analytics' && <AnalyticsDashboard />}
+
+            {viewMode === 'settings' && <SettingsView />}
           </div>
         </div>
 

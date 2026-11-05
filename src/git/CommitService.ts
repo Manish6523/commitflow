@@ -1,6 +1,7 @@
 import { GitProcess } from './GitProcess';
 import { parseRawNumstatZ } from './parseChanges';
-import { CommitDetails, CommitFilterOptions, FileChange, FileStatus, GitCommit } from '../types/git';
+import { CommitDetails, FileChange, FileStatus, GitCommit } from '../types/git';
+import { CommitFilterOptions } from '../types/protocol';
 
 const FIELD_SEP = '\x1f';
 const RECORD_SEP = '\x1e';
@@ -26,111 +27,172 @@ const COMMIT_FORMAT = RECORD_SEP + [
   '%b',
 ].join(FIELD_SEP);
 
+// Enough for the messages of a very large repository, which search reads in one pass.
+const SEARCH_MAX_BUFFER = 512 * 1024 * 1024;
+const SEARCH_TIMEOUT_MS = 120000;
+
+/** The fields search matches against, for one commit. */
+export interface CommitSearchRecord {
+  hash: string;
+  authorName: string;
+  authorEmail: string;
+  committerName: string;
+  refs: string;
+  message: string;
+}
+
+interface CommitQueryOptions {
+  branch?: string;
+  allBranches?: boolean;
+  filters?: CommitFilterOptions;
+}
+
+/**
+ * Git compares a bare date against the current time of day, so a one-day range
+ * would be empty. Expand plain dates to the start or end of that day.
+ */
+function toGitDate(value: string, edge: 'start' | 'end'): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return `${value} ${edge === 'start' ? '00:00:00' : '23:59:59'}`;
+}
+
+/** Match a partial, case-insensitive path, or a glob if the value contains one. */
+export function toPathspecs(value: string): string[] {
+  const path = value.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (/[*?[]/.test(path)) {
+    return [`:(glob,icase)${path}`, `:(glob,icase)**/${path}`];
+  }
+  return [`:(glob,icase)**/*${path}*`, `:(glob,icase)**/*${path}*/**`];
+}
+
+/** Git reports a missing HEAD differently depending on the command. */
+function isEmptyRepositoryError(err: any): boolean {
+  const stderr: string = err.stderr ?? '';
+  return (
+    stderr.includes('does not have any commits yet') ||
+    stderr.includes('fatal: your current branch') ||
+    stderr.includes("bad revision 'HEAD'") ||
+    stderr.includes("ambiguous argument 'HEAD'")
+  );
+}
+
 export class CommitService {
+  /** Options shared by `git log` and `git rev-list`. Paths go last, after `--`. */
+  private static buildQueryArgs(options: CommitQueryOptions): string[] {
+    const { authors, committers, since, until, isMerge, filePath, branch } = options.filters ?? {};
+    const args = ['--regexp-ignore-case', '--fixed-strings'];
+
+    for (const author of authors ?? []) args.push(`--author=${author}`);
+    for (const committer of committers ?? []) args.push(`--committer=${committer}`);
+    if (since) args.push(`--since=${toGitDate(since, 'start')}`);
+    if (until) args.push(`--until=${toGitDate(until, 'end')}`);
+    if (isMerge === true) args.push('--merges');
+    if (isMerge === false) args.push('--no-merges');
+
+    const revision = branch ?? options.branch;
+    if (options.allBranches) {
+      args.push('--all');
+    } else {
+      args.push(revision || 'HEAD');
+    }
+
+    args.push('--');
+    if (filePath) args.push(...toPathspecs(filePath));
+    return args;
+  }
+
   /**
-   * Get paginated commits for a repository with optional filters and sorting.
+   * Get paginated commits for a repository with optional filters.
    */
   public static async getCommits(
     repoRoot: string,
-    options: {
-      page?: number;
-      pageSize?: number;
-      branch?: string;
-      allBranches?: boolean;
-      filters?: CommitFilterOptions;
-      searchQuery?: string;
-    } = {}
+    options: CommitQueryOptions & { page?: number; pageSize?: number } = {}
   ): Promise<{ commits: GitCommit[]; totalCount: number; hasMore: boolean }> {
     const page = Math.max(1, options.page ?? 1);
     const pageSize = Math.max(1, Math.min(200, options.pageSize ?? 30));
     const skip = (page - 1) * pageSize;
-
-    const baseArgs = ['log'];
-
-    if (options.allBranches) {
-      baseArgs.push('--all');
-    } else if (options.branch && options.branch !== 'HEAD') {
-      baseArgs.push(options.branch);
-    }
-
-    // Apply filters
-    if (options.filters) {
-      const { authors, since, until, isMerge, filePath } = options.filters;
-
-      if (authors && authors.length > 0) {
-        for (const author of authors) {
-          baseArgs.push(`--author=${author}`);
-        }
-      }
-
-      if (since) {
-        baseArgs.push(`--since=${since}`);
-      }
-
-      if (until) {
-        baseArgs.push(`--until=${until}`);
-      }
-
-      if (isMerge === true) {
-        baseArgs.push('--merges');
-      } else if (isMerge === false) {
-        baseArgs.push('--no-merges');
-      }
-
-      if (filePath) {
-        baseArgs.push('--', filePath);
-      }
-    }
-
-    if (options.searchQuery && options.searchQuery.trim()) {
-      baseArgs.push(`--grep=${options.searchQuery.trim()}`, '-i');
-    }
-
-    // Calculate total count
-    let totalCount = 0;
-    try {
-      const revListArgs = ['rev-list', '--count'];
-      for (let i = 1; i < baseArgs.length; i++) {
-        const arg = baseArgs[i];
-        if (arg === '--shortstat' || arg.startsWith('--format=')) continue;
-        revListArgs.push(arg);
-      }
-      if (revListArgs.length === 2) {
-        revListArgs.push('HEAD');
-      }
-      const countRes = await GitProcess.exec(revListArgs, { cwd: repoRoot });
-      totalCount = parseInt(countRes.stdout.trim(), 10) || 0;
-    } catch {
-      totalCount = 0;
-    }
-
-    // Fetch page of commits with shortstat
-    const fetchArgs = [
-      ...baseArgs,
-      `--format=${COMMIT_FORMAT}`,
-      '--shortstat',
-      `-n`,
-      `${pageSize}`,
-      `--skip`,
-      `${skip}`,
-    ];
+    const queryArgs = this.buildQueryArgs(options);
 
     try {
-      const res = await GitProcess.exec(fetchArgs, { cwd: repoRoot });
+      const [countRes, res] = await Promise.all([
+        GitProcess.exec(['rev-list', '--count', ...queryArgs], { cwd: repoRoot }),
+        GitProcess.exec(
+          [
+            'log',
+            `--format=${COMMIT_FORMAT}`,
+            '--shortstat',
+            '-n',
+            `${pageSize}`,
+            '--skip',
+            `${skip}`,
+            ...queryArgs,
+          ],
+          { cwd: repoRoot }
+        ),
+      ]);
+      const totalCount = parseInt(countRes.stdout.trim(), 10) || 0;
       const commits = this.parseCommitsWithStats(res.stdout);
-      const hasMore = skip + commits.length < totalCount;
 
-      return {
-        commits,
-        totalCount,
-        hasMore,
-      };
+      return { commits, totalCount, hasMore: skip + commits.length < totalCount };
     } catch (err: any) {
-      if (err.stderr?.includes('does not have any commits yet') || err.stderr?.includes('fatal: your current branch')) {
+      if (isEmptyRepositoryError(err)) {
         return { commits: [], totalCount: 0, hasMore: false };
       }
       throw err;
     }
+  }
+
+  /** Load full commits by hash, keeping the given order. */
+  public static async getCommitsByHashes(repoRoot: string, hashes: string[]): Promise<GitCommit[]> {
+    if (hashes.length === 0) return [];
+    const res = await GitProcess.exec(
+      ['log', '--no-walk=unsorted', `--format=${COMMIT_FORMAT}`, '--shortstat', ...hashes, '--'],
+      { cwd: repoRoot }
+    );
+    return this.parseCommitsWithStats(res.stdout);
+  }
+
+  /**
+   * Read the searchable fields of every commit matching the filters. `codeChange`
+   * also limits this to commits that add or remove that text, which `rev-list`
+   * can't do, so it is only available here.
+   */
+  public static async getSearchRecords(
+    repoRoot: string,
+    options: CommitQueryOptions & { codeChange?: string }
+  ): Promise<CommitSearchRecord[]> {
+    const format = `${RECORD_SEP}%H${FIELD_SEP}%an${FIELD_SEP}%ae${FIELD_SEP}%cn${FIELD_SEP}%D${FIELD_SEP}%B`;
+    const args = ['log', `--format=${format}`];
+    if (options.codeChange) args.push(`-S${options.codeChange}`);
+
+    let stdout: string;
+    try {
+      const res = await GitProcess.exec([...args, ...this.buildQueryArgs(options)], {
+        cwd: repoRoot,
+        maxBuffer: SEARCH_MAX_BUFFER,
+        timeout: SEARCH_TIMEOUT_MS,
+      });
+      stdout = res.stdout;
+    } catch (err) {
+      if (isEmptyRepositoryError(err)) return [];
+      throw err;
+    }
+
+    const records: CommitSearchRecord[] = [];
+    for (const record of stdout.split(RECORD_SEP)) {
+      const [hash, authorName, authorEmail, committerName, refs, ...message] = record.split(FIELD_SEP);
+      if (hash?.trim()) {
+        records.push({
+          hash: hash.trim(),
+          authorName,
+          authorEmail,
+          committerName,
+          refs,
+          message: message.join(FIELD_SEP),
+        });
+      }
+    }
+    return records;
   }
 
   /**

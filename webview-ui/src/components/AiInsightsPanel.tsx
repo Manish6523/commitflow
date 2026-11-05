@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, FileCode2, Sparkles } from 'lucide-react';
+import { AlertTriangle, FileCode2, Settings, Sparkles } from 'lucide-react';
+import { useCommitStore } from '../stores/useCommitStore';
 import { CommitDetails } from '../types';
 import { vscode } from '../vscode';
 import { EmptyState } from './ui/EmptyState';
+import { ghostButton } from './ui/styles';
 
 export const AiInsightsPanel: React.FC<{ commit: CommitDetails }> = ({ commit }) => {
   const [analysis, setAnalysis] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const setViewMode = useCommitStore((state) => state.setViewMode);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,8 +43,8 @@ export const AiInsightsPanel: React.FC<{ commit: CommitDetails }> = ({ commit })
     return (
       <EmptyState
         icon={<Sparkles className="w-7 h-7" />}
-        title="No AI insights available"
-        detail="Check that AI is enabled and configured in the CommitFlow settings."
+        title="Couldn’t analyze this commit"
+        detail="Open the commit again to retry."
       />
     );
   }
@@ -49,6 +52,27 @@ export const AiInsightsPanel: React.FC<{ commit: CommitDetails }> = ({ commit })
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-4 space-y-4 max-w-3xl mx-auto animate-in fade-in duration-200">
+        {analysis.warning && (
+          <div role="alert" className="flex items-start gap-2 p-2.5 rounded-md bg-amber-500/10 text-xs text-gray-200">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-px" />
+            <span>{analysis.warning}</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-3 text-[11px] text-gray-400">
+          {analysis.source === 'ai' ? (
+            <span>Analyzed by {analysis.model}</span>
+          ) : (
+            <span>Basic built-in analysis. Add an API key for a real AI review.</span>
+          )}
+          {analysis.source !== 'ai' && (
+            <button onClick={() => setViewMode('settings')} className={ghostButton}>
+              <Settings className="w-3 h-3" />
+              Set up AI
+            </button>
+          )}
+        </div>
+
         <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5">
           <h4 className="font-semibold text-xs text-purple-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
             <Sparkles className="w-4 h-4" />

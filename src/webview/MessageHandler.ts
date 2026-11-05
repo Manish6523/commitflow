@@ -94,6 +94,7 @@ export class MessageHandler {
             page: message.page,
             hasMore: res.hasMore,
             activeBranch: this.activeRepo.currentBranch,
+            seq: message.seq,
             requestId,
           });
           break;
@@ -105,12 +106,10 @@ export class MessageHandler {
           }
           if (!this.activeRepo) return;
 
-          const parsed = SearchService.parseQuery(message.query);
-          const res = await CommitService.getCommits(this.activeRepo.rootUri, {
+          const res = await SearchService.search(this.activeRepo.rootUri, message.query, {
+            filters: message.filters,
             page: message.page,
             pageSize: message.pageSize,
-            filters: parsed.filters,
-            searchQuery: parsed.freeText,
           });
 
           this.postMessage({
@@ -119,6 +118,7 @@ export class MessageHandler {
             totalCount: res.totalCount,
             page: message.page,
             hasMore: res.hasMore,
+            seq: message.seq,
             requestId,
           });
           break;
@@ -283,6 +283,39 @@ export class MessageHandler {
           for (const [key, val] of Object.entries(message.settings)) {
             await config.update(key, val, vscode.ConfigurationTarget.Global);
           }
+          break;
+        }
+
+        case 'GET_AI_SETTINGS': {
+          this.postMessage({
+            type: 'AI_SETTINGS_LOADED',
+            ...(await this.aiService.getStatus()),
+            requestId,
+          });
+          break;
+        }
+
+        case 'SAVE_AI_SETTINGS': {
+          const config = vscode.workspace.getConfiguration('commitflow');
+          const { apiKey, ...settings } = await this.aiService.prepareSettings(message.settings);
+          if (apiKey !== undefined) {
+            await this.aiService.setApiKey(settings.provider, apiKey);
+          }
+          await config.update('enableAI', settings.enabled, vscode.ConfigurationTarget.Global);
+          await config.update('aiProvider', settings.provider, vscode.ConfigurationTarget.Global);
+          await config.update('aiModel', settings.model, vscode.ConfigurationTarget.Global);
+          await config.update('aiBaseUrl', settings.baseUrl, vscode.ConfigurationTarget.Global);
+          this.postMessage({
+            type: 'AI_SETTINGS_LOADED',
+            ...(await this.aiService.getStatus()),
+            requestId,
+          });
+          break;
+        }
+
+        case 'TEST_AI_CONNECTION': {
+          const result = await this.aiService.testConnection(message.settings);
+          this.postMessage({ type: 'AI_TEST_RESULT', ...result, requestId });
           break;
         }
 
@@ -492,13 +525,13 @@ export class MessageHandler {
     try {
       switch (action) {
         case 'summarize': {
-          const result = await this.aiService.summarizeCommit(payload.commit);
+          const result = await this.aiService.analyzeCommit(payload.commit);
           this.postMessage({ type: 'AI_RESULT', action, result, requestId });
           break;
         }
         case 'nl_search': {
-          const query = await this.aiService.translateNaturalLanguageSearch(payload.prompt);
-          this.postMessage({ type: 'AI_RESULT', action, result: { query }, requestId });
+          const result = await this.aiService.smartSearch(payload.prompt);
+          this.postMessage({ type: 'AI_RESULT', action, result, requestId });
           break;
         }
         case 'release_notes': {

@@ -17,6 +17,7 @@ import { HistorySelection, WORKING_COPY, pickSide } from '../utils/fileHistory';
 import { clearFileContentCache } from '../utils/fileContent';
 
 const HISTORY_PAGE_SIZE = 100;
+const SEARCH_DEBOUNCE_MS = 250;
 
 export interface FileHistoryState extends HistorySelection {
   filePath: string | null;
@@ -51,6 +52,13 @@ export interface ConfirmRequest {
 
 // Only the latest history request may update the store.
 let latestHistoryRequest = 0;
+
+let latestCommitQuery = 0;
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Results are ignored unless they answer the newest query, since older ones can finish later. */
+export const isLatestCommitQuery = (seq?: number): boolean =>
+  seq === undefined || seq === latestCommitQuery;
 
 interface CommitStoreState {
   repositories: RepositoryInfo[];
@@ -98,7 +106,6 @@ interface CommitStoreState {
   selectRepo: (repoPath: string) => void;
   loadRepositories: () => void;
   loadCommits: (page?: number) => void;
-  searchCommits: (query: string, page?: number) => void;
   selectCommit: (hash: string | null) => void;
   loadBranchesAndTags: () => void;
   loadAnalytics: () => void;
@@ -150,11 +157,8 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
 
   setSearchQuery: (searchQuery) => {
     set({ searchQuery });
-    if (searchQuery.trim()) {
-      get().searchCommits(searchQuery, 1);
-    } else {
-      get().loadCommits(1);
-    }
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => get().loadCommits(1), SEARCH_DEBOUNCE_MS);
   },
 
   setFilters: (newFilters) => {
@@ -164,6 +168,7 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
   },
 
   clearFilters: () => {
+    clearTimeout(searchTimer);
     set({ filters: {}, searchQuery: '' });
     get().loadCommits(1);
   },
@@ -180,25 +185,16 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
   },
 
   loadCommits: (page = 1) => {
-    const { pageSize, filters } = get();
+    const { pageSize, filters, searchQuery } = get();
+    const seq = ++latestCommitQuery;
+    const query = searchQuery.trim();
     set({ loading: true, page });
-    vscode.postMessage({
-      type: 'GET_COMMITS',
-      page,
-      pageSize,
-      filters,
-    });
-  },
 
-  searchCommits: (query: string, page = 1) => {
-    const { pageSize } = get();
-    set({ loading: true, page, searchQuery: query });
-    vscode.postMessage({
-      type: 'SEARCH_COMMITS',
-      query,
-      page,
-      pageSize,
-    });
+    vscode.postMessage(
+      query
+        ? { type: 'SEARCH_COMMITS', query, page, pageSize, filters, seq }
+        : { type: 'GET_COMMITS', page, pageSize, filters, seq }
+    );
   },
 
   selectCommit: (hash: string | null) => {

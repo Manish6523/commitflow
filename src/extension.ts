@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { StorageService } from './services/StorageService';
 import { AIService } from './services/AIService';
+import { AIProvider } from './services/aiClient';
 import { CommitFlowPanel } from './providers/CommitFlowPanel';
 import { SidebarViewProvider } from './providers/SidebarViewProvider';
 import { REVISION_SCHEME, RevisionContentProvider } from './providers/RevisionContentProvider';
@@ -9,7 +10,15 @@ let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
   const storageService = new StorageService(context.workspaceState, context.globalState);
-  const aiService = new AIService(context.secrets);
+  const aiService = new AIService(context.secrets, () => {
+    const config = vscode.workspace.getConfiguration('commitflow');
+    return {
+      enabled: config.get<boolean>('enableAI', false),
+      provider: config.get<AIProvider>('aiProvider', 'openai'),
+      model: config.get<string>('aiModel', ''),
+      baseUrl: config.get<string>('aiBaseUrl', ''),
+    };
+  });
 
   // 1. Activity Bar Sidebar TreeView
   const sidebarProvider = new SidebarViewProvider(storageService);
@@ -204,6 +213,10 @@ export function activate(context: vscode.ExtensionContext) {
         operation: 'create-tag',
         params: { name, targetHash: targetHash || 'HEAD', message },
       });
+    }),
+
+    vscode.commands.registerCommand('commitflow.configureAI', () => {
+      openDashboard().postToWebview({ type: 'SWITCH_VIEW', view: 'settings' });
     }),
 
     vscode.commands.registerCommand('commitflow.openSettings', () => {

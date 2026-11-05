@@ -2,6 +2,29 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
+## [0.3.0] - 2026-11-05
+
+### Added
+
+- **Bring your own AI key**: a new Settings screen connects OpenAI, Anthropic, Google Gemini or any OpenAI-compatible server. AI Insights and Smart Search now use a real model. Keys are stored in VS Code's encrypted secret storage, and files like `.env` are left out of what's sent.
+- New search operators: `code:`, `committer:`, plus working `branch:`, `tag:` and `hash:`.
+- Search suggestions that complete as you type, with arrow key and Tab support.
+
+### Changed
+
+- Plain search now matches every word, in any order, across messages, authors, emails, refs and hashes, and keeps quoted phrases together.
+- `file:` accepts part of a path, a folder or a glob, in any letter case.
+- Search waits briefly while you type, and ignores results from older queries.
+
+### Fixed
+
+- `file:` returned no results at all.
+- Searching for a commit hash showed every commit.
+- Next and Previous dropped the current search, and the date and merge filters were ignored during a search.
+- Special characters like `[` made search fail.
+- Author search was case-sensitive and reported 0 commits.
+- Clicking a day on the heatmap found nothing.
+
 ## [0.2.0] - 2026-11-04
 
 ### Added

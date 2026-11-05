@@ -1,7 +1,10 @@
 import { Branch, CommitComparisonResult, CommitDetails, ContributorStats, FileContent, FileHistoryResult, GitCommit, RepositoryInfo, Tag } from './git';
 
+import { AISettingsUpdate, AIStatus } from '../services/AIService';
+
 export interface CommitFilterOptions {
   authors?: string[];
+  committers?: string[];
   excludeAuthors?: string[];
   since?: string;
   until?: string;
@@ -38,8 +41,8 @@ export interface AnalyticsData {
 export type WebviewToExtensionAction =
   | { type: 'GET_REPOSITORIES' }
   | { type: 'SELECT_REPOSITORY'; repoPath: string }
-  | { type: 'GET_COMMITS'; page: number; pageSize: number; filters?: CommitFilterOptions; sort?: CommitSortField; branch?: string }
-  | { type: 'SEARCH_COMMITS'; query: string; page: number; pageSize: number }
+  | { type: 'GET_COMMITS'; page: number; pageSize: number; filters?: CommitFilterOptions; sort?: CommitSortField; branch?: string; seq?: number }
+  | { type: 'SEARCH_COMMITS'; query: string; page: number; pageSize: number; filters?: CommitFilterOptions; seq?: number }
   | { type: 'GET_COMMIT_DETAILS'; hash: string }
   | { type: 'GET_COMMIT_DIFF'; hash: string; filePath?: string }
   | { type: 'COMPARE_COMMITS'; baseHash: string; targetHash: string }
@@ -58,14 +61,17 @@ export type WebviewToExtensionAction =
   | { type: 'COPY_TO_CLIPBOARD'; text: string }
   | { type: 'OPEN_IN_EDITOR'; filePath: string; line?: number }
   | { type: 'OPEN_DIFF_EDITOR'; baseHash: string | null; targetHash: string | null; filePath: string; basePath?: string }
-  | { type: 'WEBVIEW_READY' };
+  | { type: 'WEBVIEW_READY' }
+  | { type: 'GET_AI_SETTINGS' }
+  | { type: 'SAVE_AI_SETTINGS'; settings: AISettingsUpdate }
+  | { type: 'TEST_AI_CONNECTION'; settings: AISettingsUpdate };
 
 export type WebviewMessage = WebviewToExtensionAction & { id?: string };
 
 export type ExtensionToWebviewAction =
   | { type: 'REPOSITORIES_LOADED'; repositories: RepositoryInfo[]; activeRepo: RepositoryInfo | null }
-  | { type: 'COMMITS_LOADED'; commits: GitCommit[]; totalCount: number; page: number; hasMore: boolean; activeBranch?: string }
-  | { type: 'SEARCH_RESULTS'; commits: GitCommit[]; totalCount: number; page: number; hasMore: boolean }
+  | { type: 'COMMITS_LOADED'; commits: GitCommit[]; totalCount: number; page: number; hasMore: boolean; activeBranch?: string; seq?: number }
+  | { type: 'SEARCH_RESULTS'; commits: GitCommit[]; totalCount: number; page: number; hasMore: boolean; seq?: number }
   | { type: 'COMMIT_DETAILS_LOADED'; details: CommitDetails }
   | { type: 'DIFF_LOADED'; hash: string; diff: string; filePath?: string }
   | { type: 'COMPARE_RESULT_LOADED'; result: CommitComparisonResult }
@@ -83,6 +89,8 @@ export type ExtensionToWebviewAction =
   | { type: 'SAVED_FILTERS_LOADED'; filters: SavedFilter[] }
   | { type: 'SETTINGS_LOADED'; settings: Record<string, any> }
   | { type: 'AI_RESULT'; action: string; result: any }
+  | ({ type: 'AI_SETTINGS_LOADED' } & AIStatus)
+  | { type: 'AI_TEST_RESULT'; ok: boolean; message: string; models: string[] }
   | { type: 'ERROR'; message: string };
 
 export type ExtensionMessage = ExtensionToWebviewAction & { requestId?: string };

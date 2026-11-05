@@ -5,6 +5,7 @@ import {
   GitCommit,
   GitBranch,
   RefreshCw,
+  Settings,
   LayoutGrid,
   List,
   Clock,
@@ -119,6 +120,17 @@ export const Header: React.FC = () => {
 
       {/* Action Buttons */}
       <div className="flex items-center gap-2">
+        <button
+          onClick={() => setViewMode('settings')}
+          title="Settings"
+          aria-label="Settings"
+          aria-pressed={viewMode === 'settings'}
+          className={`p-1.5 rounded-md hover:bg-vscode-hover text-gray-300 hover:text-vscode-fg transition border border-vscode-border ${
+            viewMode === 'settings' ? 'bg-vscode-hover' : ''
+          }`}
+        >
+          <Settings className="w-4 h-4" />
+        </button>
         <button
           onClick={refresh}
           disabled={loading}
