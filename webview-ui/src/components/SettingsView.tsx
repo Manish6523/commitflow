@@ -100,14 +100,18 @@ export const SettingsView: React.FC = () => {
       });
       setStatus(saved);
       setApiKey('');
-      setResult({ ok: true, message: 'Saved.' });
+      setResult(
+        saved.enabled && !saved.model
+          ? { ok: false, message: 'Saved, but no model was found. Click Test connection to see why.' }
+          : { ok: true, message: 'Saved.' }
+      );
     });
 
   const test = () =>
     run(async () => {
       const res = await vscode.request<Result & { models: string[] }>(
         { type: 'TEST_AI_CONNECTION', settings: settings() },
-        120000
+        200000
       );
       setModels(res.models);
       setResult(res);
@@ -156,7 +160,7 @@ export const SettingsView: React.FC = () => {
         {isCustom && (
           <Field
             label="Server URL"
-            hint="Any OpenAI-compatible server. Must use https unless it runs on this machine."
+            hint="The address of any OpenAI-compatible server, usually ending in /v1. Must use https unless it runs on this machine."
           >
             <input
               value={status.baseUrl}

@@ -31,6 +31,11 @@ export interface CommitAnalysis {
 
 const MAX_DIFF_CHARS = 40000;
 
+// AI analyses are slow and use up the provider's quota, so reopening a commit
+// reuses the last one for a while.
+const ANALYSIS_TTL_MS = 30 * 60 * 1000;
+const MAX_SAVED_ANALYSES = 100;
+
 // Never send these to a third party, even though they're in the commit.
 const SENSITIVE_FILE = /(^|\/)(\.env[^/]*|.*\.(pem|key|p12|pfx)|id_rsa[^/]*|.*credentials[^/]*|.*secrets?\.[^/]*)$/i;
 
@@ -76,7 +81,14 @@ function parseAnalysis(text: string): Pick<CommitAnalysis, 'summary' | 'keyChang
   };
 }
 
+interface SavedAnalysis {
+  result: Promise<CommitAnalysis>;
+  expires: number;
+}
+
 export class AIService {
+  private readonly analyses = new Map<string, SavedAnalysis>();
+
   constructor(
     private readonly secretStorage: vscode.SecretStorage,
     private readonly readSettings: () => AISettings = () => ({
@@ -110,15 +122,22 @@ export class AIService {
     return { ...settings, apiKey };
   }
 
-  /** The connection to use for AI features, if they're set up. */
+  /**
+   * The connection to use for AI features, or null if they're not set up. With
+   * no saved model it asks the provider, and throws if that isn't possible.
+   */
   private async activeConnection(): Promise<AIConnection | null> {
     const settings = this.readSettings();
     const connection = await this.toConnection(settings);
-    const ready =
-      settings.enabled &&
-      settings.model &&
-      (settings.provider === 'custom' ? settings.baseUrl : connection.apiKey);
-    return ready ? connection : null;
+    const configured = settings.provider === 'custom' ? settings.baseUrl : connection.apiKey;
+    if (!settings.enabled || !configured) return null;
+    if (settings.model) return connection;
+
+    const model = pickDefaultModel(settings.provider, await listModels(connection));
+    if (!model) {
+      throw new Error('No model is selected. Choose one in Settings.');
+    }
+    return { ...connection, model };
   }
 
   /** Validate a change before saving, choosing a model if none was picked. */
@@ -167,18 +186,55 @@ export class AIService {
     }
   }
 
-  /** Analyze a commit with the configured model, or locally if AI isn't set up. */
-  public async analyzeCommit(commit: CommitDetails): Promise<CommitAnalysis> {
-    const local: CommitAnalysis = { ...(await this.summarizeCommit(commit)), source: 'local' };
-    const connection = await this.activeConnection();
-    if (!connection) return local;
+  /**
+   * Analyze a commit, reusing a recent AI result or one still in progress.
+   * Failures and local results aren't kept, so the next attempt tries again.
+   */
+  public analyzeCommit(commit: CommitDetails): Promise<CommitAnalysis> {
+    const { enabled, provider, model, baseUrl } = this.readSettings();
+    const key = [commit.hash, enabled, provider, model, baseUrl].join('\n');
 
+    const saved = this.analyses.get(key);
+    if (saved && Date.now() < saved.expires) return saved.result;
+
+    const entry: SavedAnalysis = { result: this.runAnalysis(commit), expires: Infinity };
+    this.analyses.delete(key);
+    this.analyses.set(key, entry);
+    this.pruneAnalyses();
+
+    const forget = () => {
+      if (this.analyses.get(key) === entry) this.analyses.delete(key);
+    };
+    entry.result.then((analysis) => {
+      if (analysis.source === 'ai') entry.expires = Date.now() + ANALYSIS_TTL_MS;
+      else forget();
+    }, forget);
+    return entry.result;
+  }
+
+  private pruneAnalyses(): void {
+    const now = Date.now();
+    for (const [key, { expires }] of this.analyses) {
+      if (now >= expires) this.analyses.delete(key);
+    }
+    for (const key of this.analyses.keys()) {
+      if (this.analyses.size <= MAX_SAVED_ANALYSES) break;
+      this.analyses.delete(key);
+    }
+  }
+
+  /** Analyze a commit with the configured model, or locally if AI isn't set up. */
+  private async runAnalysis(commit: CommitDetails): Promise<CommitAnalysis> {
+    const local: CommitAnalysis = { ...(await this.summarizeCommit(commit)), source: 'local' };
     const files = (commit.files ?? [])
       .map((f) => `${f.status} ${f.path} (+${f.insertions}/-${f.deletions})`)
       .join('\n');
     const prompt = `Commit message:\n${commit.subject}\n\n${commit.body}\n\nFiles:\n${files}\n\nDiff:\n${prepareDiff(commit.diff ?? '')}`;
 
     try {
+      const connection = await this.activeConnection();
+      if (!connection) return local;
+
       const text = await complete(connection, { system: COMMIT_SYSTEM_PROMPT, prompt, maxTokens: 2048 });
       return { ...parseAnalysis(text), source: 'ai', model: connection.model };
     } catch (err: any) {
@@ -193,10 +249,10 @@ export class AIService {
     now: Date = new Date()
   ): Promise<{ query: string; source: 'ai' | 'local'; warning?: string }> {
     const local = await this.translateNaturalLanguageSearch(description, now);
-    const connection = await this.activeConnection();
-    if (!connection) return { query: local, source: 'local' };
-
     try {
+      const connection = await this.activeConnection();
+      if (!connection) return { query: local, source: 'local' };
+
       const text = await complete(connection, {
         system: SEARCH_SYSTEM_PROMPT,
         prompt: `Today is ${now.toISOString().split('T')[0]}.\n\nDescription: ${description}`,

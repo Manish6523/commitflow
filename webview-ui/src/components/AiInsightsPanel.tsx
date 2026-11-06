@@ -15,7 +15,7 @@ export const AiInsightsPanel: React.FC<{ commit: CommitDetails }> = ({ commit })
   useEffect(() => {
     let cancelled = false;
     vscode
-      .request<{ result?: any }>({ type: 'AI_ACTION', action: 'summarize', payload: { commit } }, 120000)
+      .request<{ result?: any }>({ type: 'AI_ACTION', action: 'summarize', payload: { commit } }, 200000)
       .then((res) => {
         if (!cancelled) setAnalysis(res?.result ?? null);
       })
@@ -34,7 +34,7 @@ export const AiInsightsPanel: React.FC<{ commit: CommitDetails }> = ({ commit })
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-purple-500">
         <Sparkles className="w-8 h-8 animate-pulse" />
-        <span className="text-xs">Analyzing commit impact and security risk...</span>
+        <span className="text-xs">Analyzing this commit. Large commits can take a minute or two.</span>
       </div>
     );
   }

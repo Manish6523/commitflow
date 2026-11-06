@@ -13,7 +13,7 @@ interface CompletionRequest {
   maxTokens: number;
 }
 
-const REQUEST_TIMEOUT_MS = 90000;
+const REQUEST_TIMEOUT_MS = 180000;
 const ANTHROPIC_VERSION = '2023-06-01';
 
 const ENDPOINTS = {
@@ -35,7 +35,16 @@ export function normalizeBaseUrl(value: string): string {
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLocal)) {
     throw new Error('The server URL must use https, unless it is on this machine.');
   }
-  return url.toString().replace(/\/+$/, '');
+  // People often paste the full endpoint, but requests add these paths themselves.
+  return url
+    .toString()
+    .replace(/\/+$/, '')
+    .replace(/\/(chat\/completions|completions|models)$/, '');
+}
+
+/** Remove the reasoning some models put before their answer. */
+export function stripReasoning(text: string): string {
+  return text.replace(/<think(ing)?>[\s\S]*?<\/think(ing)?>/gi, '').trim();
 }
 
 function failure(status: number, detail: string): Error {
@@ -144,10 +153,11 @@ export async function complete(connection: AIConnection, request: CompletionRequ
     text = body.choices?.[0]?.message?.content;
   }
 
-  if (!text?.trim()) {
+  const answer = stripReasoning(text ?? '');
+  if (!answer) {
     throw new Error('The model returned an empty response.');
   }
-  return text;
+  return answer;
 }
 
 const NON_CHAT_MODEL = /embed|audio|realtime|tts|transcribe|whisper|image|dall-e|moderation|search|sora|vision|aqa/i;
@@ -190,5 +200,5 @@ export function pickDefaultModel(provider: AIProvider, models: string[]): string
     const stable = models.filter((id) => /^gemini-/.test(id) && !/preview|exp/i.test(id));
     return stable.find((id) => id.includes('pro')) ?? stable[0] ?? models[0] ?? '';
   }
-  return models[0] ?? '';
+  return models.find((id) => id === 'auto') ?? models[0] ?? '';
 }

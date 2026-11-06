@@ -2,6 +2,20 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
+## [0.3.1] - 2026-11-06
+
+### Changed
+
+- AI Insights keeps each result for 30 minutes, so switching tabs or reopening a commit no longer analyzes it again.
+- AI requests can now take up to 3 minutes, because large commits can be slow on free or local models.
+
+### Fixed
+
+- Custom servers failed if the Server URL was the full `/v1/chat/completions` address. That address now works.
+- With no model saved, AI features quietly used the basic analysis. CommitFlow now asks the server and picks one, preferring `auto`.
+- AI failures now show a clear message, and Save warns when no model could be found.
+- `<think>` reasoning blocks from some models no longer break AI replies.
+
 ## [0.3.0] - 2026-11-05
 
 ### Added

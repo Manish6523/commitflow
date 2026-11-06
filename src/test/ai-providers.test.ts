@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from 'vitest
 import * as http from 'http';
 import { AddressInfo } from 'net';
 import { AIService, AISettings, prepareDiff } from '../services/AIService';
-import { complete, listModels, normalizeBaseUrl, pickDefaultModel } from '../services/aiClient';
+import { complete, listModels, normalizeBaseUrl, pickDefaultModel, stripReasoning } from '../services/aiClient';
 import { CommitDetails } from '../types/git';
 
 const KEY = 'sk-test-secret-value';
@@ -147,6 +147,22 @@ describe('OpenAI-compatible server over real HTTP', () => {
     expect(prepared.model).toBe('new');
   });
 
+  it('works with a pasted endpoint and no saved model', async () => {
+    reply = { status: 200, body: { choices: [{ message: { content: '<think>{hmm}</think>' + analysisJson } }] } };
+    requests.length = 0;
+
+    const result = await service({ baseUrl: `${baseUrl}/chat/completions`, model: '' }).analyzeCommit(commit);
+
+    expect(result).toMatchObject({ source: 'ai', summary: 'Adds auth.', model: 'new' });
+    expect(requests.map((r) => r.url)).toEqual(['/v1/models', '/v1/chat/completions']);
+  });
+
+  it('explains when no model can be found', async () => {
+    const result = await service({ baseUrl: 'http://127.0.0.1:1/v1', model: '' }).analyzeCommit(commit);
+    expect(result.source).toBe('local');
+    expect(result.warning).toContain('Could not reach');
+  });
+
   it('works without a key for local servers', async () => {
     reply = { status: 200, body: { choices: [{ message: { content: analysisJson } }] } };
     requests.length = 0;
@@ -224,12 +240,96 @@ describe('provider request formats', () => {
   });
 });
 
+describe('saved AI analyses', () => {
+  const MINUTE = 60 * 1000;
+  const settings: AISettings = { enabled: true, provider: 'custom', model: 'm', baseUrl: 'http://localhost:1/v1' };
+  const good = JSON.stringify({ summary: 'Adds auth.', keyChanges: [], riskLevel: 'Low', riskFactors: [] });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function stubReplies(...replies: Array<() => Response>) {
+    let call = 0;
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => replies[Math.min(call++, replies.length - 1)]());
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+  const aiReply = () => new Response(JSON.stringify({ choices: [{ message: { content: good } }] }));
+  const details = (hash: string) => ({ hash, subject: 'Add auth', body: '', files: [], diff: '' }) as unknown as CommitDetails;
+
+  it('reuses a result for 30 minutes, then analyzes again', async () => {
+    const fetchMock = stubReplies(aiReply);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const service = new AIService(fakeSecrets().storage, () => settings);
+
+    const first = await service.analyzeCommit(details('abc'));
+    now.mockReturnValue(1000 + 29 * MINUTE);
+    expect(await service.analyzeCommit(details('abc'))).toEqual(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(1000 + 30 * MINUTE);
+    await service.analyzeCommit(details('abc'));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares an analysis that is still running', async () => {
+    const fetchMock = stubReplies(aiReply);
+    const service = new AIService(fakeSecrets().storage, () => settings);
+
+    const [a, b] = await Promise.all([service.analyzeCommit(details('abc')), service.analyzeCommit(details('abc'))]);
+
+    expect(a).toEqual(b);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps commits apart and analyzes again after the model changes', async () => {
+    const fetchMock = stubReplies(aiReply);
+    let current = settings;
+    const service = new AIService(fakeSecrets().storage, () => current);
+
+    await service.analyzeCommit(details('abc'));
+    await service.analyzeCommit(details('def'));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    current = { ...settings, model: 'other' };
+    await service.analyzeCommit(details('abc'));
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries after a failure instead of keeping it', async () => {
+    const fetchMock = stubReplies(() => new Response('{}', { status: 500 }), aiReply);
+    const service = new AIService(fakeSecrets().storage, () => settings);
+
+    expect((await service.analyzeCommit(details('abc'))).source).toBe('local');
+    expect((await service.analyzeCommit(details('abc'))).source).toBe('ai');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('picking defaults and validating input', () => {
   it('prefers capable general models', () => {
     expect(pickDefaultModel('anthropic', ['claude-haiku-5-5', 'claude-opus-5-5'])).toBe('claude-opus-5-5');
     expect(pickDefaultModel('openai', ['o9', 'gpt-x'])).toBe('gpt-x');
     expect(pickDefaultModel('gemini', ['gemini-9-pro-preview', 'gemini-3-flash', 'gemini-3-pro'])).toBe('gemini-3-pro');
     expect(pickDefaultModel('custom', [])).toBe('');
+  });
+
+  it('accepts a pasted full endpoint', () => {
+    expect(normalizeBaseUrl('http://localhost:3001/v1/chat/completions')).toBe('http://localhost:3001/v1');
+    expect(normalizeBaseUrl('http://localhost:3001/v1/chat/completions/')).toBe('http://localhost:3001/v1');
+    expect(normalizeBaseUrl('http://localhost:3001/v1/models')).toBe('http://localhost:3001/v1');
+  });
+
+  it('prefers a server router model for custom servers', () => {
+    expect(pickDefaultModel('custom', ['fast', 'auto', 'big'])).toBe('auto');
+    expect(pickDefaultModel('custom', ['fast', 'big'])).toBe('fast');
+  });
+
+  it('removes reasoning before the answer', () => {
+    expect(stripReasoning('<think>maybe {x}</think>\n{"a":1}')).toBe('{"a":1}');
+    expect(stripReasoning('plain')).toBe('plain');
   });
 
   it('allows plain http only on this machine', () => {

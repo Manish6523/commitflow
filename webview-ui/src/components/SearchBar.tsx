@@ -112,7 +112,7 @@ export const SearchBar: React.FC = () => {
     try {
       const res = await vscode.request<{ result?: { query: string; warning?: string } }>(
         { type: 'AI_ACTION', action: 'nl_search', payload: { prompt } },
-        120000
+        200000
       );
       if (res?.result?.query) {
         setSearchQuery(res.result.query);
