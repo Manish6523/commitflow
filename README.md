@@ -29,30 +29,37 @@ Plain words must all appear, in any order, across messages, authors, emails, bra
 - `is:merge` / `is:non-merge` — Filter merge commits
 - `hash:<sha>` — Find a commit by full or short hash, on any branch
 
-### 3. Rich Commit Inspector & Diff Viewer
+### 3. Source Control Sidebar
+The CommitFlow icon in the Activity Bar opens a Source Control panel that works like VS Code's own, plus a commit graph.
+- **Commit**: write a message, or click ✨ to generate one with your AI settings. The Commit button also offers Commit (Amend), Commit & Push, Commit & Sync and Undo Last Commit. `Ctrl+Enter` commits.
+- **Changes**: Merge Changes, Staged Changes and Changes, as a list or a folder tree. Click a file to see its diff, hover for open, discard and stage buttons, or right-click for more, including File History. Ctrl/Shift-click selects several files.
+- **Sync**: pull, push, fetch, sync or publish a branch, and switch branches by clicking the branch name. More actions are in the view's `⋯` menu.
+- **Stashes and graph**: apply, pop or drop stashes, and browse recent commits, including incoming ones. Click a commit to open it in the dashboard.
+
+### 4. Rich Commit Inspector & Diff Viewer
 - **Full-Page Diff Editor**: Monaco-powered split and inline diffs with syntax highlighting, word-level changes, collapsible unchanged regions and next/previous change navigation (F7 / Shift+F7).
 - **File History**: See every commit that changed a file, following renames. Click a commit to see its change, or mark any two versions as A and B to compare them, including your working copy.
 - **Changed Files Breakdown**: View all modified files with status codes (`A` Added, `M` Modified, `D` Deleted, `R` Renamed) and additions/deletions counts.
 - **Native VS Code Diff Integration**: Jump directly into VS Code's native diff editor with one click.
 - **Parent Navigation**: Click parent hashes to traverse merge commits and branching histories.
 
-### 4. Commit Comparison Engine
+### 5. Commit Comparison Engine
 - Compare arbitrary commits, branches, tags, or `HEAD`.
 - Inspect commits ahead and behind.
 - Cumulative file-level diffs and additions/deletions totals.
 
-### 5. Branch & Tag Explorer
+### 6. Branch & Tag Explorer
 - **Local & Remote Branches**: Inspect tracking branches, ahead/behind counters relative to upstream, and last commit dates.
 - **Branch Operations**: Checkout, create branch from commit, and delete local branches safely.
 - **Tag Management**: Inspect lightweight and annotated tags with tagger dates and messages.
 
-### 6. Contributor & Repository Analytics
+### 7. Contributor & Repository Analytics
 - **52-Week GitHub-style Activity Heatmap**: Interactive calendar tiles with commit density levels (0–4) and date-click filtering.
 - **Commit Velocity Charts**: Daily and weekly commit trends powered by Recharts.
 - **Contributor Leaderboard**: Rankings by total commits, first/last activity dates, and line churn.
 - **Frequently Modified Files**: Identifies hotspots and high-churn code paths across history.
 
-### 7. Optional AI with Your Own API Key
+### 8. Optional AI with Your Own API Key
 Open the gear icon in the dashboard, or run **CommitFlow: Configure AI**, then pick a provider and paste your key. OpenAI, Anthropic, Google Gemini and any OpenAI-compatible server (including local ones like Ollama) are supported.
 - **AI Insights**: A real review of a commit's purpose, key changes and risks.
 - **Smart Search**: Describe what you're looking for, and it becomes a search query.

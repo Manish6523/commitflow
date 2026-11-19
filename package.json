@@ -45,8 +45,8 @@
       "commitflow-activitybar": [
         {
           "id": "commitflow.sidebar",
-          "name": "CommitFlow Explorer",
-          "type": "tree"
+          "name": "Source Control",
+          "type": "webview"
         }
       ]
     },
@@ -134,6 +134,136 @@
         "command": "commitflow.openSettings",
         "title": "CommitFlow: Open Settings",
         "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.pull",
+        "title": "Pull",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.push",
+        "title": "Push",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.sync",
+        "title": "Sync",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.fetch",
+        "title": "Fetch",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.undoLastCommit",
+        "title": "Undo Last Commit",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.stageAll",
+        "title": "Stage All Changes",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.unstageAll",
+        "title": "Unstage All Changes",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.discardAll",
+        "title": "Discard All Changes",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.stash",
+        "title": "Stash",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.stashIncludeUntracked",
+        "title": "Stash (Include Untracked)",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.stashPopLatest",
+        "title": "Pop Latest Stash",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.switchBranch",
+        "title": "Switch Branch…",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.file.openChanges",
+        "title": "Open Changes",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.file.openFile",
+        "title": "Open File",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.file.stage",
+        "title": "Stage Changes",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.file.unstage",
+        "title": "Unstage Changes",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.file.discard",
+        "title": "Discard Changes",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.file.fileHistory",
+        "title": "Open File History",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.file.copyPath",
+        "title": "Copy Relative Path",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.scm.file.reveal",
+        "title": "Reveal in Explorer View",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.graph.open",
+        "title": "Open in CommitFlow",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.graph.copyHash",
+        "title": "Copy Commit Hash",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.graph.checkout",
+        "title": "Checkout (Detached)",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.graph.createBranch",
+        "title": "Create Branch from Here…",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.graph.cherryPick",
+        "title": "Cherry Pick",
+        "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.graph.revert",
+        "title": "Revert Commit",
+        "category": "CommitFlow"
       }
     ],
     "menus": {
@@ -147,6 +277,66 @@
           "command": "commitflow.refresh",
           "when": "view == commitflow.sidebar",
           "group": "navigation"
+        },
+        {
+          "command": "commitflow.scm.pull",
+          "when": "view == commitflow.sidebar",
+          "group": "1_sync@1"
+        },
+        {
+          "command": "commitflow.scm.push",
+          "when": "view == commitflow.sidebar",
+          "group": "1_sync@2"
+        },
+        {
+          "command": "commitflow.scm.sync",
+          "when": "view == commitflow.sidebar",
+          "group": "1_sync@3"
+        },
+        {
+          "command": "commitflow.scm.fetch",
+          "when": "view == commitflow.sidebar",
+          "group": "1_sync@4"
+        },
+        {
+          "command": "commitflow.scm.undoLastCommit",
+          "when": "view == commitflow.sidebar",
+          "group": "2_commit@1"
+        },
+        {
+          "command": "commitflow.scm.stageAll",
+          "when": "view == commitflow.sidebar",
+          "group": "3_changes@1"
+        },
+        {
+          "command": "commitflow.scm.unstageAll",
+          "when": "view == commitflow.sidebar",
+          "group": "3_changes@2"
+        },
+        {
+          "command": "commitflow.scm.discardAll",
+          "when": "view == commitflow.sidebar",
+          "group": "3_changes@3"
+        },
+        {
+          "command": "commitflow.scm.stash",
+          "when": "view == commitflow.sidebar",
+          "group": "4_stash@1"
+        },
+        {
+          "command": "commitflow.scm.stashIncludeUntracked",
+          "when": "view == commitflow.sidebar",
+          "group": "4_stash@2"
+        },
+        {
+          "command": "commitflow.scm.stashPopLatest",
+          "when": "view == commitflow.sidebar",
+          "group": "4_stash@3"
+        },
+        {
+          "command": "commitflow.scm.switchBranch",
+          "when": "view == commitflow.sidebar",
+          "group": "5_branch@1"
         }
       ],
       "editor/title": [
@@ -211,6 +401,134 @@
         },
         {
           "command": "commitflow.openSettings"
+        },
+        {
+          "command": "commitflow.scm.file.openChanges",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.scm.file.openFile",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.scm.file.stage",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.scm.file.unstage",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.scm.file.discard",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.scm.file.fileHistory",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.scm.file.copyPath",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.scm.file.reveal",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.graph.open",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.graph.copyHash",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.graph.checkout",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.graph.createBranch",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.graph.cherryPick",
+          "when": "false"
+        },
+        {
+          "command": "commitflow.graph.revert",
+          "when": "false"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "commitflow.scm.file.openChanges",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(file-staged|file-changes)$/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "commitflow.scm.file.openFile",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(file-staged|file-changes|file-conflicts)$/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "commitflow.scm.file.stage",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(file-changes|file-conflicts)$/",
+          "group": "2_stage@1"
+        },
+        {
+          "command": "commitflow.scm.file.unstage",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(file-staged)$/",
+          "group": "2_stage@1"
+        },
+        {
+          "command": "commitflow.scm.file.discard",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(file-changes)$/",
+          "group": "2_stage@2"
+        },
+        {
+          "command": "commitflow.scm.file.fileHistory",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(file-staged|file-changes|file-conflicts)$/",
+          "group": "3_history@1"
+        },
+        {
+          "command": "commitflow.scm.file.copyPath",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(file-staged|file-changes|file-conflicts)$/",
+          "group": "4_path@1"
+        },
+        {
+          "command": "commitflow.scm.file.reveal",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(file-staged|file-changes|file-conflicts)$/",
+          "group": "4_path@2"
+        },
+        {
+          "command": "commitflow.graph.open",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "commitflow.graph.copyHash",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "group": "1_copy@1"
+        },
+        {
+          "command": "commitflow.graph.checkout",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "group": "2_branch@1"
+        },
+        {
+          "command": "commitflow.graph.createBranch",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "group": "2_branch@2"
+        },
+        {
+          "command": "commitflow.graph.cherryPick",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "group": "3_change@1"
+        },
+        {
+          "command": "commitflow.graph.revert",
+          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "group": "3_change@2"
         }
       ]
     },

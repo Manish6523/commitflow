@@ -1,5 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Check, ChevronDown, Copy, GitMerge, ShieldCheck, Sparkles, User } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  GitMerge,
+  ShieldCheck,
+  Sparkles,
+  User,
+  X,
+} from 'lucide-react';
 import { useCommitStore } from '../stores/useCommitStore';
 import { vscode } from '../vscode';
 import { AiInsightsPanel } from './AiInsightsPanel';
@@ -8,7 +20,15 @@ import { CommitRowsSkeleton } from './ui/Skeletons';
 import { underlineTab } from './ui/styles';
 
 export const CommitDetailPage: React.FC = () => {
-  const { selectedCommitDetails: commit, selectCommit, openFileHistory } = useCommitStore();
+  const {
+    selectedCommitDetails: commit,
+    selectCommit,
+    openFileHistory,
+    commitNavHistory,
+    commitNavIndex,
+    navigateCommitHistory,
+    commits,
+  } = useCommitStore();
   const [tab, setTab] = useState<'changes' | 'ai'>('changes');
   const [copied, setCopied] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
@@ -17,6 +37,30 @@ export const CommitDetailPage: React.FC = () => {
     useCommitStore.setState({ loadingDetails: false });
     selectCommit(null);
   };
+
+  const canGoBackHistory = commitNavIndex > 0;
+  const canGoForwardHistory = commitNavIndex < commitNavHistory.length - 1;
+
+  const currentIndex = commit ? commits.findIndex((c) => c.hash === commit.hash) : -1;
+  const canGoNewer = currentIndex > 0;
+  const canGoOlder =
+    currentIndex !== -1
+      ? currentIndex < commits.length - 1
+      : (commit?.parentHashes.length ?? 0) > 0;
+
+  const previousCommitHash = canGoBackHistory
+    ? commitNavHistory[commitNavIndex - 1]
+    : canGoNewer
+    ? commits[currentIndex - 1]?.hash
+    : null;
+
+  const nextCommitHash = canGoForwardHistory
+    ? commitNavHistory[commitNavIndex + 1]
+    : canGoOlder
+    ? currentIndex !== -1 && currentIndex < commits.length - 1
+      ? commits[currentIndex + 1]?.hash
+      : commit?.parentHashes[0] ?? null
+    : commit?.parentHashes[0] ?? null;
 
   useEffect(() => {
     setTab('changes');
@@ -39,18 +83,67 @@ export const CommitDetailPage: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleNavigatePrevious = () => {
+    if (canGoBackHistory) {
+      navigateCommitHistory('back');
+    } else if (previousCommitHash) {
+      selectCommit(previousCommitHash);
+    }
+  };
+
+  const handleNavigateNext = () => {
+    if (canGoForwardHistory) {
+      navigateCommitHistory('forward');
+    } else if (nextCommitHash) {
+      selectCommit(nextCommitHash);
+    }
+  };
+
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-vscode-bg animate-in fade-in slide-in-from-right-2 duration-200">
       <div className="px-3 pt-2 border-b border-vscode-border bg-vscode-sidebar/60 shrink-0">
         <div className="flex items-start gap-2">
-          <button
-            onClick={close}
-            className="mt-0.5 p-1.5 rounded-md text-gray-300 hover:text-vscode-fg hover:bg-vscode-hover transition-colors"
-            title="Back (Esc)"
-            aria-label="Back"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+          {/* Navigation & Back Controls */}
+          <div className="flex items-center gap-0.5 mt-0.5 shrink-0 bg-vscode-input/50 rounded-lg p-0.5 border border-vscode-border">
+            <button
+              onClick={close}
+              className="p-1.5 rounded-md text-gray-300 hover:text-vscode-fg hover:bg-vscode-hover transition-colors"
+              title="Close Commit View (Esc)"
+              aria-label="Close"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+
+            <div className="h-3.5 w-[1px] bg-vscode-border mx-0.5" />
+
+            <button
+              onClick={handleNavigatePrevious}
+              disabled={!previousCommitHash && !canGoBackHistory}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-300 hover:text-vscode-fg hover:bg-vscode-hover disabled:opacity-30 disabled:pointer-events-none transition font-medium"
+              title={
+                previousCommitHash
+                  ? `Navigate to previous commit (${previousCommitHash.substring(0, 7)})`
+                  : 'No previous commit'
+              }
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Previous</span>
+            </button>
+
+            <button
+              onClick={handleNavigateNext}
+              disabled={!nextCommitHash && !canGoForwardHistory}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-300 hover:text-vscode-fg hover:bg-vscode-hover disabled:opacity-30 disabled:pointer-events-none transition font-medium"
+              title={
+                nextCommitHash
+                  ? `Navigate to next commit (${nextCommitHash.substring(0, 7)})`
+                  : 'No next commit'
+              }
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
           <div className="flex-1 min-w-0">
             {commit ? (
@@ -79,12 +172,22 @@ export const CommitDetailPage: React.FC = () => {
                         <button
                           key={parent}
                           onClick={() => selectCommit(parent)}
-                          className="font-mono text-blue-500 hover:underline"
+                          className="font-mono text-blue-500 hover:underline cursor-pointer"
+                          title={`Navigate to parent commit ${parent.substring(0, 7)}`}
                         >
                           {parent.substring(0, 7)}
                         </button>
                       ))}
                     </span>
+                  )}
+                  {previousCommitHash && (
+                    <button
+                      onClick={handleNavigatePrevious}
+                      className="font-mono text-xs text-blue-400 hover:underline flex items-center gap-0.5 ml-1"
+                      title={`Back to previous commit (${previousCommitHash.substring(0, 7)})`}
+                    >
+                      <span>(← back to {previousCommitHash.substring(0, 7)})</span>
+                    </button>
                   )}
                   {commit.isMerge && (
                     <span className="inline-flex items-center gap-1 px-1.5 rounded bg-purple-500/20 text-purple-500">
@@ -107,6 +210,14 @@ export const CommitDetailPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          <button
+            onClick={close}
+            className="p-1.5 rounded-md text-gray-400 hover:text-vscode-fg hover:bg-vscode-hover transition"
+            title="Close (Esc)"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {commit?.body && messageOpen && (

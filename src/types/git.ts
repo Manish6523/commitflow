@@ -74,6 +74,40 @@ export interface RepositoryInfo {
   uncommittedCount: number;
 }
 
+/** How a file changed, as Source Control letters it. U is untracked and ! is a conflict. */
+export type ChangeStatus = 'M' | 'A' | 'D' | 'R' | 'C' | 'U' | '!';
+
+export interface WorkingFileChange {
+  path: string;
+  /** The path before a staged rename. */
+  oldPath?: string;
+  status: ChangeStatus;
+}
+
+export interface WorkingTreeStatus {
+  staged: WorkingFileChange[];
+  /** Unstaged changes, including untracked files. */
+  unstaged: WorkingFileChange[];
+  conflicts: WorkingFileChange[];
+  /** Null when HEAD is detached. */
+  branch: string | null;
+  /** Short hash of HEAD, or null before the first commit. */
+  head: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  hasRemote: boolean;
+  /** A merge, rebase, cherry-pick or revert that stopped part way. */
+  operation?: 'merge' | 'rebase' | 'cherry-pick' | 'revert';
+}
+
+export interface StashEntry {
+  index: number;
+  message: string;
+  date: string;
+  hash: string;
+}
+
 export interface CommitComparisonResult {
   baseCommit: string;
   targetCommit: string;
@@ -124,4 +158,3 @@ export interface ContributorStats {
   deletions: number;
   filesModified: number;
 }
-

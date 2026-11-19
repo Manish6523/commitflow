@@ -3,7 +3,8 @@ import { StorageService } from './services/StorageService';
 import { AIService } from './services/AIService';
 import { AIProvider } from './services/aiClient';
 import { CommitFlowPanel } from './providers/CommitFlowPanel';
-import { SidebarViewProvider } from './providers/SidebarViewProvider';
+import { FileCommand, FileMenuContext, SidebarWebviewViewProvider } from './providers/SidebarWebviewViewProvider';
+import { ScmAction } from './types/protocol';
 import { REVISION_SCHEME, RevisionContentProvider } from './providers/RevisionContentProvider';
 
 let statusBarItem: vscode.StatusBarItem;
@@ -20,10 +21,15 @@ export function activate(context: vscode.ExtensionContext) {
     };
   });
 
-  // 1. Activity Bar Sidebar TreeView
-  const sidebarProvider = new SidebarViewProvider(storageService);
+  // 1. Activity bar sidebar: Source Control with a commit graph
+  const sidebarProvider = new SidebarWebviewViewProvider(context.extensionUri, storageService, aiService, () =>
+    CommitFlowPanel.currentPanel?.postToWebview({ type: 'HISTORY_CHANGED' })
+  );
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('commitflow.sidebar', sidebarProvider)
+    sidebarProvider,
+    vscode.window.registerWebviewViewProvider(SidebarWebviewViewProvider.viewType, sidebarProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    })
   );
 
   context.subscriptions.push(
@@ -52,17 +58,52 @@ export function activate(context: vscode.ExtensionContext) {
       openDashboard();
     }),
 
+    ...(
+      [
+        ['commitflow.scm.pull', { kind: 'pull' }],
+        ['commitflow.scm.push', { kind: 'push' }],
+        ['commitflow.scm.sync', { kind: 'sync' }],
+        ['commitflow.scm.fetch', { kind: 'fetch' }],
+        ['commitflow.scm.stash', { kind: 'stash', includeUntracked: false }],
+        ['commitflow.scm.stashIncludeUntracked', { kind: 'stash', includeUntracked: true }],
+        ['commitflow.scm.stashPopLatest', { kind: 'stashPop', index: 0 }],
+        ['commitflow.scm.undoLastCommit', { kind: 'undoLastCommit' }],
+        ['commitflow.scm.switchBranch', { kind: 'switchBranch' }],
+        ['commitflow.scm.stageAll', { kind: 'stageAll' }],
+        ['commitflow.scm.unstageAll', { kind: 'unstageAll' }],
+        ['commitflow.scm.discardAll', { kind: 'discardAll' }],
+      ] as [string, ScmAction][]
+    ).map(([id, action]) => vscode.commands.registerCommand(id, () => sidebarProvider.runAction(action))),
+
+    // Right-click menus on the sidebar's file rows.
+    ...(['openChanges', 'openFile', 'stage', 'unstage', 'discard', 'fileHistory', 'copyPath', 'reveal'] as FileCommand[]).map(
+      (command) =>
+        vscode.commands.registerCommand(`commitflow.scm.file.${command}`, (context?: FileMenuContext) =>
+          sidebarProvider.runFileCommand(command, context)
+        )
+    ),
+
+    // Right-click menus on the sidebar's graph rows, which pass { hash }.
+    ...(
+      [
+        ['commitflow.graph.open', 'commitflow.openCommit'],
+        ['commitflow.graph.checkout', 'commitflow.checkoutCommit'],
+        ['commitflow.graph.createBranch', 'commitflow.createBranch'],
+        ['commitflow.graph.cherryPick', 'commitflow.cherryPick'],
+        ['commitflow.graph.revert', 'commitflow.revertCommit'],
+      ] as const
+    ).map(([id, target]) =>
+      vscode.commands.registerCommand(id, (context?: { hash?: string }) =>
+        context?.hash ? vscode.commands.executeCommand(target, context.hash) : undefined
+      )
+    ),
+    vscode.commands.registerCommand('commitflow.graph.copyHash', async (context?: { hash?: string }) => {
+      if (context?.hash) await vscode.env.clipboard.writeText(context.hash);
+    }),
+
     vscode.commands.registerCommand('commitflow.refresh', () => {
       sidebarProvider.refresh();
-      if (CommitFlowPanel.currentPanel) {
-        CommitFlowPanel.currentPanel.messageHandler.handleMessage({ type: 'GET_REPOSITORIES' });
-        CommitFlowPanel.currentPanel.messageHandler.handleMessage({
-          type: 'GET_COMMITS',
-          page: 1,
-          pageSize: 30,
-        });
-      }
-      vscode.window.showInformationMessage('CommitFlow repository refreshed.');
+      CommitFlowPanel.currentPanel?.postToWebview({ type: 'HISTORY_CHANGED' });
     }),
 
     vscode.commands.registerCommand('commitflow.search', () => {

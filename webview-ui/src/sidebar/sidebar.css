@@ -1,0 +1,452 @@
+/* The Source Control sidebar, styled with the workbench's own theme colours so it
+   sits beside VS Code's views without looking foreign. */
+
+.scm {
+  --row-height: 22px;
+  --indent: 8px;
+  --decor-M: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+  --decor-A: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+  --decor-C: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+  --decor-D: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+  --decor-R: var(--vscode-gitDecoration-renamedResourceForeground, #73c991);
+  --decor-U: var(--vscode-gitDecoration-untrackedResourceForeground, #73c991);
+  --decor-conflict: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b);
+
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size, 13px);
+  user-select: none;
+}
+
+.scm .codicon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.scm-muted {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ---- Top: branch, message and commit button ---- */
+
+.scm-top {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 12px 10px 20px;
+  flex-shrink: 0;
+}
+
+.scm-branchbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+}
+
+.scm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 22px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.scm-chip:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.scm-chip:focus-visible,
+.scm-icon-button:focus-visible,
+.scm-button:focus-visible,
+.scm-row:focus-visible,
+.scm-header:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.scm-chip .codicon {
+  font-size: 14px;
+}
+
+.scm-truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.scm-select {
+  max-width: 45%;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  font: inherit;
+}
+
+.scm-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--vscode-inputValidation-warningBorder, #b89500);
+  background: var(--vscode-inputValidation-warningBackground, rgba(184, 149, 0, 0.12));
+  line-height: 1.4;
+}
+
+.scm-banner .codicon {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  margin-top: 1px;
+}
+
+.scm-input-wrap {
+  position: relative;
+  display: flex;
+}
+
+.scm-input {
+  flex: 1;
+  min-height: 26px;
+  max-height: 180px;
+  padding: 4px 28px 4px 6px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  line-height: 18px;
+  resize: none;
+  overflow-y: auto;
+  outline: none;
+  user-select: text;
+}
+
+.scm-input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.scm-input:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.scm-input.is-invalid {
+  border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+.scm-input-action {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+
+.scm-amend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.scm-button-row {
+  display: flex;
+  height: 26px;
+}
+
+.scm-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font: inherit;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.scm-button:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.scm-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.scm-button .codicon {
+  font-size: 14px;
+}
+
+.scm-button.is-main {
+  border-radius: 2px 0 0 2px;
+}
+
+.scm-button.is-split {
+  flex: 0 0 26px;
+  padding: 0;
+  border-left: 1px solid var(--vscode-button-separator, rgba(255, 255, 255, 0.4));
+  border-radius: 0 2px 2px 0;
+}
+
+/* ---- Menus ---- */
+
+.scm-menu {
+  position: absolute;
+  z-index: 20;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, transparent));
+  border-radius: 5px;
+  background: var(--vscode-menu-background);
+  color: var(--vscode-menu-foreground);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+}
+
+.scm-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 24px;
+  padding: 0 24px 0 12px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scm-menu-item:hover,
+.scm-menu-item:focus {
+  background: var(--vscode-menu-selectionBackground);
+  color: var(--vscode-menu-selectionForeground);
+  outline: none;
+}
+
+.scm-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border));
+}
+
+/* ---- Scrolling body ---- */
+
+.scm-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.scm-pane-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--row-height);
+  padding: 0 8px 0 2px;
+  border-top: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+  background: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background));
+  color: var(--vscode-sideBarSectionHeader-foreground, inherit);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.scm-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--row-height);
+  padding: 0 8px 0 2px;
+  cursor: pointer;
+}
+
+.scm-header:hover,
+.scm-pane-header:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.scm-header-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.scm-actions {
+  display: none;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.scm-header:hover .scm-actions,
+.scm-header:focus-within .scm-actions,
+.scm-pane-header:hover .scm-actions,
+.scm-pane-header:focus-within .scm-actions,
+.scm-row:hover .scm-actions,
+.scm-row:focus-within .scm-actions,
+.scm-row.is-selected .scm-actions {
+  display: flex;
+}
+
+.scm-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--vscode-icon-foreground);
+  cursor: pointer;
+}
+
+.scm-icon-button:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.scm-icon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.scm-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 4px;
+  border-radius: 11px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: center;
+  text-transform: none;
+  flex-shrink: 0;
+}
+
+.scm-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--row-height);
+  padding-right: 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.scm-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.scm-row.is-selected {
+  background: var(--vscode-list-inactiveSelectionBackground);
+}
+
+.scm-body:focus-within .scm-row.is-selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.scm-name {
+  flex-shrink: 1;
+}
+
+.scm-dir {
+  flex: 1;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.scm-row.is-deleted .scm-name {
+  text-decoration: line-through;
+}
+
+.scm-letter {
+  width: 14px;
+  text-align: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.scm-empty {
+  padding: 2px 0 6px 28px;
+  font-style: italic;
+  color: var(--vscode-descriptionForeground);
+}
+
+.scm-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 20px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.5;
+}
+
+.scm-graph-author {
+  flex: 0 1 auto;
+  max-width: 90px;
+  font-size: 12px;
+}
+
+/* In a narrow sidebar, the message matters more than the author or labels. */
+@media (max-width: 300px) {
+  .scm-graph-author {
+    display: none;
+  }
+}
+
+.scm-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100px;
+  min-width: 0;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  flex-shrink: 1;
+}
+
+.scm-ref .codicon {
+  font-size: 11px;
+}
+
+.scm-spin {
+  animation: scm-spin 1.2s linear infinite;
+}
+
+@keyframes scm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

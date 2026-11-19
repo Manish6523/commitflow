@@ -5,27 +5,11 @@ import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { timeAgo } from '../utils/fileHistory';
 import { CommitActions, RefBadges } from './CommitBits';
 import { iconButton } from './ui/styles';
+import { LANE_COLORS, edgePath, layoutGraph } from '../utils/graphLayout';
 
 interface CommitGraphViewProps {
   commits: GitCommit[];
 }
-
-interface GraphNode {
-  commit: GitCommit;
-  lane: number;
-  x: number;
-  y: number;
-  parentCoords: { x: number; y: number }[];
-}
-
-const LANE_COLORS = [
-  '#3b82f6', // blue
-  '#10b981', // emerald
-  '#8b5cf6', // purple
-  '#f59e0b', // amber
-  '#ec4899', // pink
-  '#06b6d4', // cyan
-];
 
 const ROW_HEIGHT = 32;
 const LANE_WIDTH = 20;
@@ -35,79 +19,10 @@ export const CommitGraphView: React.FC<CommitGraphViewProps> = ({ commits }) => 
   const { selectCommit } = useCommitStore();
   const [zoom, setZoom] = useState(1);
 
-  // Calculate actual DAG swimlanes and parent-child curves
-  const { nodes, totalLanes } = useMemo(() => {
-    const commitIndexMap = new Map<string, number>();
-    commits.forEach((c, idx) => commitIndexMap.set(c.hash, idx));
-
-    const activeLanes: (string | null)[] = [];
-    const calculatedNodes: GraphNode[] = [];
-    let maxLane = 0;
-
-    commits.forEach((commit, rowIndex) => {
-      // Find lane for this commit
-      let lane = activeLanes.indexOf(commit.hash);
-      if (lane === -1) {
-        lane = activeLanes.indexOf(null);
-        if (lane === -1) {
-          lane = activeLanes.length;
-          activeLanes.push(null);
-        }
-      }
-      if (lane > maxLane) maxLane = lane;
-
-      const y = rowIndex * ROW_HEIGHT + ROW_HEIGHT / 2;
-      const x = GRAPH_LEFT_PAD + lane * LANE_WIDTH;
-
-      // Determine parent lanes
-      const parentCoords: { x: number; y: number }[] = [];
-      const primaryParent = commit.parentHashes[0];
-
-      if (primaryParent && commitIndexMap.has(primaryParent)) {
-        activeLanes[lane] = primaryParent;
-      } else {
-        activeLanes[lane] = null;
-      }
-
-      // Handle merge parents
-      for (let pIdx = 1; pIdx < commit.parentHashes.length; pIdx++) {
-        const pHash = commit.parentHashes[pIdx];
-        if (commitIndexMap.has(pHash)) {
-          let pLane = activeLanes.indexOf(pHash);
-          if (pLane === -1) {
-            pLane = activeLanes.indexOf(null);
-            if (pLane === -1) {
-              pLane = activeLanes.length;
-              activeLanes.push(null);
-            }
-          }
-          activeLanes[pLane] = pHash;
-          if (pLane > maxLane) maxLane = pLane;
-        }
-      }
-
-      calculatedNodes.push({
-        commit,
-        lane,
-        x,
-        y,
-        parentCoords,
-      });
-    });
-
-    // Second pass to resolve parent coordinates
-    calculatedNodes.forEach((node) => {
-      node.commit.parentHashes.forEach((pHash) => {
-        const pIndex = commitIndexMap.get(pHash);
-        if (pIndex !== undefined && calculatedNodes[pIndex]) {
-          const parentNode = calculatedNodes[pIndex];
-          node.parentCoords.push({ x: parentNode.x, y: parentNode.y });
-        }
-      });
-    });
-
-    return { nodes: calculatedNodes, totalLanes: Math.max(1, maxLane + 1) };
-  }, [commits]);
+  const { nodes, totalLanes } = useMemo(
+    () => layoutGraph(commits, { rowHeight: ROW_HEIGHT, laneWidth: LANE_WIDTH, leftPad: GRAPH_LEFT_PAD }),
+    [commits]
+  );
 
   const graphWidth = GRAPH_LEFT_PAD + totalLanes * LANE_WIDTH;
   const graphHeight = Math.max(600, nodes.length * ROW_HEIGHT);
@@ -167,11 +82,7 @@ export const CommitGraphView: React.FC<CommitGraphViewProps> = ({ commits }) => 
             {nodes.map((node) =>
               node.parentCoords.map((parent, pIdx) => {
                 const color = LANE_COLORS[node.lane % LANE_COLORS.length];
-                const deltaY = parent.y - node.y;
-                const path =
-                  node.x === parent.x
-                    ? `M ${node.x} ${node.y} L ${parent.x} ${parent.y}`
-                    : `M ${node.x} ${node.y} C ${node.x} ${node.y + deltaY * 0.5}, ${parent.x} ${parent.y - deltaY * 0.5}, ${parent.x} ${parent.y}`;
+                const path = edgePath(node, parent);
 
                 return (
                   <path

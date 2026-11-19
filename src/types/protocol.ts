@@ -1,4 +1,17 @@
-import { Branch, CommitComparisonResult, CommitDetails, ContributorStats, FileContent, FileHistoryResult, GitCommit, RepositoryInfo, Tag } from './git';
+import {
+  Branch,
+  CommitComparisonResult,
+  CommitDetails,
+  ContributorStats,
+  FileContent,
+  FileHistoryResult,
+  GitCommit,
+  RepositoryInfo,
+  StashEntry,
+  Tag,
+  WorkingFileChange,
+  WorkingTreeStatus,
+} from './git';
 
 import { AISettingsUpdate, AIStatus } from '../services/AIService';
 
@@ -38,6 +51,36 @@ export interface AnalyticsData {
   activityHeatmap: { date: string; count: number; level: 0 | 1 | 2 | 3 | 4 }[];
 }
 
+/** Everything the Source Control sidebar shows. */
+export interface ScmState {
+  repositories: { name: string; root: string }[];
+  activeRoot: string | null;
+  status: WorkingTreeStatus | null;
+  stashes: StashEntry[];
+  commits: GitCommit[];
+}
+
+export type ScmFileGroup = 'conflicts' | 'staged' | 'changes';
+
+export type ScmAction =
+  | { kind: 'stage'; paths: string[] }
+  | { kind: 'stageAll' }
+  | { kind: 'unstage'; paths: string[] }
+  | { kind: 'unstageAll' }
+  | { kind: 'discard'; changes: WorkingFileChange[] }
+  | { kind: 'discardAll' }
+  | { kind: 'commit'; message: string; amend?: boolean; then?: 'push' | 'sync' }
+  | { kind: 'undoLastCommit' }
+  | { kind: 'lastCommitMessage' }
+  | { kind: 'pull' }
+  | { kind: 'push' }
+  | { kind: 'sync' }
+  | { kind: 'fetch' }
+  | { kind: 'stash'; includeUntracked?: boolean; message?: string }
+  | { kind: 'stashPop' | 'stashApply' | 'stashDrop'; index: number }
+  | { kind: 'abortOperation' }
+  | { kind: 'switchBranch' };
+
 export type WebviewToExtensionAction =
   | { type: 'GET_REPOSITORIES' }
   | { type: 'SELECT_REPOSITORY'; repoPath: string }
@@ -64,7 +107,14 @@ export type WebviewToExtensionAction =
   | { type: 'WEBVIEW_READY' }
   | { type: 'GET_AI_SETTINGS' }
   | { type: 'SAVE_AI_SETTINGS'; settings: AISettingsUpdate }
-  | { type: 'TEST_AI_CONNECTION'; settings: AISettingsUpdate };
+  | { type: 'TEST_AI_CONNECTION'; settings: AISettingsUpdate }
+  | { type: 'SCM_GET_STATE' }
+  | { type: 'SCM_SELECT_REPOSITORY'; root: string }
+  | { type: 'SCM_ACTION'; action: ScmAction }
+  | { type: 'SCM_OPEN'; file: WorkingFileChange; group: ScmFileGroup; mode: 'diff' | 'file' }
+  | { type: 'SCM_GENERATE_MESSAGE' }
+  | { type: 'SCM_FILE_HISTORY'; path: string }
+  | { type: 'OPEN_DASHBOARD'; hash?: string };
 
 export type WebviewMessage = WebviewToExtensionAction & { id?: string };
 
@@ -88,6 +138,11 @@ export type ExtensionToWebviewAction =
   | { type: 'GIT_OP_ERROR'; operation: string; error: string }
   | { type: 'SAVED_FILTERS_LOADED'; filters: SavedFilter[] }
   | { type: 'SETTINGS_LOADED'; settings: Record<string, any> }
+  | { type: 'SCM_STATE'; state: ScmState }
+  /** The sidebar changed history, so the dashboard should reload what it shows. */
+  | { type: 'HISTORY_CHANGED' }
+  | { type: 'SCM_ACTION_DONE'; message?: string; commitMessage?: string }
+  | { type: 'COMMIT_MESSAGE_GENERATED'; message: string; source: 'ai' | 'local'; warning?: string }
   | { type: 'AI_RESULT'; action: string; result: any }
   | ({ type: 'AI_SETTINGS_LOADED' } & AIStatus)
   | { type: 'AI_TEST_RESULT'; ok: boolean; message: string; models: string[] }

@@ -89,6 +89,40 @@ export interface CommitFilterOptions {
 
 export type ViewMode = 'grid' | 'list' | 'timeline' | 'graph' | 'branches' | 'fileHistory' | 'compare' | 'analytics' | 'settings';
 
+/** How a file changed, as Source Control letters it. U is untracked and ! is a conflict. */
+export type ChangeStatus = 'M' | 'A' | 'D' | 'R' | 'C' | 'U' | '!';
+
+export interface WorkingFileChange {
+  path: string;
+  /** The path before a staged rename. */
+  oldPath?: string;
+  status: ChangeStatus;
+}
+
+export interface WorkingTreeStatus {
+  staged: WorkingFileChange[];
+  /** Unstaged changes, including untracked files. */
+  unstaged: WorkingFileChange[];
+  conflicts: WorkingFileChange[];
+  /** Null when HEAD is detached. */
+  branch: string | null;
+  /** Short hash of HEAD, or null before the first commit. */
+  head: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  hasRemote: boolean;
+  /** A merge, rebase, cherry-pick or revert that stopped part way. */
+  operation?: 'merge' | 'rebase' | 'cherry-pick' | 'revert';
+}
+
+export interface StashEntry {
+  index: number;
+  message: string;
+  date: string;
+  hash: string;
+}
+
 export interface FileHistoryCommit {
   hash: string;
   shortHash: string;
@@ -169,3 +203,33 @@ export interface CommitComparisonResult {
   diff: string;
 }
 
+
+/** Everything the Source Control sidebar shows. Mirrors ScmState in the extension. */
+export interface ScmState {
+  repositories: { name: string; root: string }[];
+  activeRoot: string | null;
+  status: WorkingTreeStatus | null;
+  stashes: StashEntry[];
+  commits: GitCommit[];
+}
+
+export type ScmFileGroup = 'conflicts' | 'staged' | 'changes';
+
+export type ScmAction =
+  | { kind: 'stage'; paths: string[] }
+  | { kind: 'stageAll' }
+  | { kind: 'unstage'; paths: string[] }
+  | { kind: 'unstageAll' }
+  | { kind: 'discard'; changes: WorkingFileChange[] }
+  | { kind: 'discardAll' }
+  | { kind: 'commit'; message: string; amend?: boolean; then?: 'push' | 'sync' }
+  | { kind: 'undoLastCommit' }
+  | { kind: 'lastCommitMessage' }
+  | { kind: 'pull' }
+  | { kind: 'push' }
+  | { kind: 'sync' }
+  | { kind: 'fetch' }
+  | { kind: 'stash'; includeUntracked?: boolean; message?: string }
+  | { kind: 'stashPop' | 'stashApply' | 'stashDrop'; index: number }
+  | { kind: 'abortOperation' }
+  | { kind: 'switchBranch' };

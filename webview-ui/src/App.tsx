@@ -148,6 +148,14 @@ export const App: React.FC = () => {
           break;
         }
 
+        case 'HISTORY_CHANGED': {
+          const store = useCommitStore.getState();
+          store.loadRepositories();
+          store.loadCommits(store.page);
+          if (store.viewMode === 'branches') store.loadBranchesAndTags();
+          break;
+        }
+
         case 'GIT_OP_SUCCESS': {
           setNotification({ type: 'success', message: msg.message });
           setTimeout(() => setNotification(null), 4000);

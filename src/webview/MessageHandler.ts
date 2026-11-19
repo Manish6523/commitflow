@@ -20,7 +20,7 @@ export class MessageHandler {
   private repositories: RepositoryInfo[] = [];
 
   constructor(
-    private readonly panel: vscode.WebviewPanel,
+    private readonly target: { webview: vscode.Webview },
     private readonly storageService: StorageService,
     private readonly aiService: AIService
   ) {}
@@ -101,12 +101,9 @@ export class MessageHandler {
         }
 
         case 'SEARCH_COMMITS': {
-          if (!this.activeRepo) {
-            await this.refreshRepositories();
-          }
-          if (!this.activeRepo) return;
+          await this.requireActiveRepo();
 
-          const res = await SearchService.search(this.activeRepo.rootUri, message.query, {
+          const res = await SearchService.search(this.activeRepo!.rootUri, message.query, {
             filters: message.filters,
             page: message.page,
             pageSize: message.pageSize,
@@ -125,8 +122,8 @@ export class MessageHandler {
         }
 
         case 'GET_COMMIT_DETAILS': {
-          if (!this.activeRepo) return;
-          const details = await CommitService.getCommitDetails(this.activeRepo.rootUri, message.hash);
+          await this.requireActiveRepo();
+          const details = await CommitService.getCommitDetails(this.activeRepo!.rootUri, message.hash);
           this.postMessage({
             type: 'COMMIT_DETAILS_LOADED',
             details,
@@ -136,9 +133,9 @@ export class MessageHandler {
         }
 
         case 'GET_COMMIT_DIFF': {
-          if (!this.activeRepo) return;
+          await this.requireActiveRepo();
           const diff = await CommitService.getFileDiff(
-            this.activeRepo.rootUri,
+            this.activeRepo!.rootUri,
             message.hash,
             message.filePath
           );
@@ -153,9 +150,9 @@ export class MessageHandler {
         }
 
         case 'COMPARE_COMMITS': {
-          if (!this.activeRepo) return;
+          await this.requireActiveRepo();
           const result = await DiffService.compareCommits(
-            this.activeRepo.rootUri,
+            this.activeRepo!.rootUri,
             message.baseHash,
             message.targetHash
           );
@@ -168,9 +165,9 @@ export class MessageHandler {
         }
 
         case 'GET_BRANCHES_TAGS': {
-          if (!this.activeRepo) return;
-          const branches = await BranchService.getBranches(this.activeRepo.rootUri);
-          const tags = await TagService.getTags(this.activeRepo.rootUri);
+          await this.requireActiveRepo();
+          const branches = await BranchService.getBranches(this.activeRepo!.rootUri);
+          const tags = await TagService.getTags(this.activeRepo!.rootUri);
           this.postMessage({
             type: 'BRANCHES_TAGS_LOADED',
             branches,
@@ -181,8 +178,8 @@ export class MessageHandler {
         }
 
         case 'GET_ANALYTICS': {
-          if (!this.activeRepo) return;
-          const analytics = await AnalyticsService.getAnalytics(this.activeRepo.rootUri);
+          await this.requireActiveRepo();
+          const analytics = await AnalyticsService.getAnalytics(this.activeRepo!.rootUri);
           this.postMessage({
             type: 'ANALYTICS_LOADED',
             analytics,
@@ -227,7 +224,7 @@ export class MessageHandler {
         }
 
         case 'EXECUTE_GIT_OP': {
-          if (!this.activeRepo) return;
+          await this.requireActiveRepo();
           await this.handleGitOperation(message.operation, message.params, requestId);
           break;
         }
@@ -320,7 +317,7 @@ export class MessageHandler {
         }
 
         case 'AI_ACTION': {
-          if (!this.activeRepo) return;
+          await this.requireActiveRepo();
           await this.handleAIAction(message.action, message.payload, requestId);
           break;
         }
@@ -332,10 +329,10 @@ export class MessageHandler {
         }
 
         case 'OPEN_IN_EDITOR': {
-          if (!this.activeRepo) return;
+          await this.requireActiveRepo();
           const fullPath = path.isAbsolute(message.filePath)
             ? message.filePath
-            : path.join(this.activeRepo.rootUri, message.filePath);
+            : path.join(this.activeRepo!.rootUri, message.filePath);
           const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(fullPath));
           await vscode.window.showTextDocument(doc, {
             preview: true,
@@ -554,7 +551,7 @@ export class MessageHandler {
   }
 
   private postMessage(msg: ExtensionMessage): void {
-    this.panel.webview.postMessage(msg);
+    this.target.webview.postMessage(msg);
   }
 }
 

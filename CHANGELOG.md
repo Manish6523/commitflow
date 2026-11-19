@@ -2,6 +2,19 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Source Control sidebar**: the CommitFlow activity bar view is now a full Source Control panel, laid out like VS Code's own. Write a message (or generate one with AI), commit, amend, commit and push, or undo the last commit. Stage, unstage and discard files from Staged Changes, Changes and Merge Changes, as a list or a folder tree, with multi-select and right-click menus.
+- Pull, push, sync, fetch and publish a branch from the sidebar, switch branches from its branch name, and stash or pop changes.
+- A commit graph under the changes, including commits coming in from the remote. Click one to open it in the dashboard.
+- The sidebar updates itself when files or Git change, and shows the number of changes on the CommitFlow icon.
+
+### Fixed
+
+- Opening a commit while the dashboard was still starting could load forever.
+
 ## [0.3.1] - 2026-11-06
 
 ### Changed
