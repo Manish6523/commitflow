@@ -13,11 +13,12 @@ interface MonacoDiffEditorProps {
   layout: 'split' | 'inline';
   ignoreWhitespace: boolean;
   wordWrap: boolean;
+  expandAll: boolean;
   onChangeCount: (count: number) => void;
 }
 
 const MonacoDiffEditor = forwardRef<MonacoDiffHandle, MonacoDiffEditorProps>(
-  ({ original, modified, originalPath, modifiedPath, layout, ignoreWhitespace, wordWrap, onChangeCount }, ref) => {
+  ({ original, modified, originalPath, modifiedPath, layout, ignoreWhitespace, wordWrap, expandAll, onChangeCount }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null);
     const onChangeCountRef = useRef(onChangeCount);
@@ -80,8 +81,15 @@ const MonacoDiffEditor = forwardRef<MonacoDiffHandle, MonacoDiffEditorProps>(
         // Wrapped lines stay aligned on both sides of a split diff.
         wordWrap: wordWrap ? 'on' : 'off',
         diffWordWrap: wordWrap ? 'on' : 'off',
+        // Off shows every line; on folds long unchanged stretches again.
+        hideUnchangedRegions: {
+          enabled: !expandAll,
+          contextLineCount: 3,
+          minimumLineCount: 5,
+          revealLineCount: 20,
+        },
       });
-    }, [layout, ignoreWhitespace, wordWrap]);
+    }, [layout, ignoreWhitespace, wordWrap, expandAll]);
 
     return <div ref={containerRef} className="h-full w-full" />;
   }

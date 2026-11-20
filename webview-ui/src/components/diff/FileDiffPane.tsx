@@ -11,6 +11,8 @@ import {
   Pilcrow,
   Rows2,
   WrapText,
+  FoldVertical,
+  UnfoldVertical,
 } from 'lucide-react';
 import { useCommitStore } from '../../stores/useCommitStore';
 import { DiffSide } from '../../types';
@@ -66,7 +68,7 @@ const NOTICES: Record<Notice, { icon: React.ReactNode; title: string; detail: st
 };
 
 export const FileDiffPane: React.FC<FileDiffPaneProps> = ({ base, target }) => {
-  const { diffLayout, setDiffLayout, diffWordWrap, setDiffWordWrap } = useCommitStore();
+  const { diffLayout, setDiffLayout, diffWordWrap, setDiffWordWrap, diffExpandAll, setDiffExpandAll } = useCommitStore();
   const [diff, setDiff] = useState<LoadedDiff | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
@@ -223,6 +225,15 @@ export const FileDiffPane: React.FC<FileDiffPaneProps> = ({ base, target }) => {
           >
             <WrapText className="w-3.5 h-3.5" />
           </button>
+          <button
+            onClick={() => setDiffExpandAll(!diffExpandAll)}
+            className={`${iconButton} ${diffExpandAll ? 'bg-vscode-hover text-vscode-fg' : ''}`}
+            title={diffExpandAll ? 'Collapse unchanged lines' : 'Expand all hidden lines'}
+            aria-label={diffExpandAll ? 'Collapse unchanged lines' : 'Expand all hidden lines'}
+            aria-pressed={diffExpandAll}
+          >
+            {diffExpandAll ? <FoldVertical className="w-3.5 h-3.5" /> : <UnfoldVertical className="w-3.5 h-3.5" />}
+          </button>
 
           <div className="w-px h-4 bg-vscode-border mx-1" />
 
@@ -249,6 +260,7 @@ export const FileDiffPane: React.FC<FileDiffPaneProps> = ({ base, target }) => {
                 layout={diffLayout}
                 ignoreWhitespace={ignoreWhitespace}
                 wordWrap={diffWordWrap}
+                expandAll={diffExpandAll}
                 onChangeCount={setChangeCount}
               />
             </Suspense>

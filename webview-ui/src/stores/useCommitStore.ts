@@ -88,6 +88,8 @@ interface CommitStoreState {
   diffLayout: DiffLayout;
   /** Wrap long lines in diffs instead of scrolling sideways. */
   diffWordWrap: boolean;
+  /** Show every line of a diff instead of collapsing unchanged ones. */
+  diffExpandAll: boolean;
   pendingConfirm: ConfirmRequest | null;
 
   // Actions
@@ -103,6 +105,7 @@ interface CommitStoreState {
   resetRepositoryState: () => void;
   setDiffLayout: (layout: DiffLayout) => void;
   setDiffWordWrap: (wrap: boolean) => void;
+  setDiffExpandAll: (expand: boolean) => void;
   setViewMode: (mode: ViewMode) => void;
   setSearchQuery: (query: string) => void;
   setFilters: (filters: Partial<CommitFilterOptions>) => void;
@@ -149,6 +152,7 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
   trackedFiles: null,
   diffLayout: vscode.getState<{ diffLayout?: DiffLayout }>()?.diffLayout ?? 'split',
   diffWordWrap: vscode.getState<{ diffWordWrap?: boolean }>()?.diffWordWrap ?? false,
+  diffExpandAll: vscode.getState<{ diffExpandAll?: boolean }>()?.diffExpandAll ?? false,
   pendingConfirm: null,
 
   requestConfirm: (pendingConfirm) => set({ pendingConfirm }),
@@ -360,6 +364,11 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
     if (get().viewMode === 'fileHistory') {
       get().loadTrackedFiles();
     }
+  },
+
+  setDiffExpandAll: (diffExpandAll) => {
+    set({ diffExpandAll });
+    vscode.setState({ ...vscode.getState<object>(), diffExpandAll });
   },
 
   setDiffWordWrap: (diffWordWrap) => {

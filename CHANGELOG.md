@@ -2,6 +2,12 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
+## [0.4.4] - 2026-11-20
+
+### Added
+
+- **Expand all / Collapse unchanged** button in every diff, next to Wrap. One click shows every hidden line of the file; another folds the unchanged stretches again. CommitFlow remembers your choice.
+
 ## [0.4.3] - 2026-11-20
 
 ### Fixed
