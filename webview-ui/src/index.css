@@ -98,3 +98,9 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* A starred commit: a gold edge and a light tint that stays visible on hover. */
+.cf-starred {
+  box-shadow: inset 3px 0 0 #f5b301;
+  background-image: linear-gradient(rgba(245, 179, 1, 0.09), rgba(245, 179, 1, 0.09));
+}

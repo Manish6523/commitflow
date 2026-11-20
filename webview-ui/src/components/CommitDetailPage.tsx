@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCommitStore } from '../stores/useCommitStore';
+import { StarButton, StarMark, useStarred } from './CommitBits';
 import { vscode } from '../vscode';
 import { AiInsightsPanel } from './AiInsightsPanel';
 import { DiffWorkspace } from './diff/DiffWorkspace';
@@ -24,11 +25,8 @@ export const CommitDetailPage: React.FC = () => {
     selectedCommitDetails: commit,
     selectCommit,
     openFileHistory,
-    commitNavHistory,
-    commitNavIndex,
-    navigateCommitHistory,
-    commits,
   } = useCommitStore();
+  const starred = useStarred(commit?.hash);
   const [tab, setTab] = useState<'changes' | 'ai'>('changes');
   const [copied, setCopied] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
@@ -38,29 +36,23 @@ export const CommitDetailPage: React.FC = () => {
     selectCommit(null);
   };
 
-  const canGoBackHistory = commitNavIndex > 0;
-  const canGoForwardHistory = commitNavIndex < commitNavHistory.length - 1;
-
-  const currentIndex = commit ? commits.findIndex((c) => c.hash === commit.hash) : -1;
-  const canGoNewer = currentIndex > 0;
-  const canGoOlder =
-    currentIndex !== -1
-      ? currentIndex < commits.length - 1
-      : (commit?.parentHashes.length ?? 0) > 0;
-
-  const previousCommitHash = canGoBackHistory
-    ? commitNavHistory[commitNavIndex - 1]
-    : canGoNewer
-    ? commits[currentIndex - 1]?.hash
-    : null;
-
-  const nextCommitHash = canGoForwardHistory
-    ? commitNavHistory[commitNavIndex + 1]
-    : canGoOlder
-    ? currentIndex !== -1 && currentIndex < commits.length - 1
-      ? commits[currentIndex + 1]?.hash
-      : commit?.parentHashes[0] ?? null
-    : commit?.parentHashes[0] ?? null;
+  // The commits made just before and after this one, found by the extension so
+  // they work wherever the commit was opened from.
+  const [adjacent, setAdjacent] = useState<{ hash: string; older: string | null; newer: string | null } | null>(null);
+  useEffect(() => {
+    if (!commit) return;
+    let current = true;
+    vscode
+      .request<{ older: string | null; newer: string | null }>({ type: 'GET_ADJACENT_COMMITS', hash: commit.hash })
+      .then((res) => current && setAdjacent({ hash: commit.hash, older: res.older, newer: res.newer }))
+      .catch(() => current && setAdjacent({ hash: commit.hash, older: commit.parentHashes[0] ?? null, newer: null }));
+    return () => {
+      current = false;
+    };
+  }, [commit?.hash]);
+  const neighbours = adjacent && adjacent.hash === commit?.hash ? adjacent : null;
+  const older = neighbours?.older ?? null;
+  const newer = neighbours?.newer ?? null;
 
   useEffect(() => {
     setTab('changes');
@@ -83,22 +75,6 @@ export const CommitDetailPage: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleNavigatePrevious = () => {
-    if (canGoBackHistory) {
-      navigateCommitHistory('back');
-    } else if (previousCommitHash) {
-      selectCommit(previousCommitHash);
-    }
-  };
-
-  const handleNavigateNext = () => {
-    if (canGoForwardHistory) {
-      navigateCommitHistory('forward');
-    } else if (nextCommitHash) {
-      selectCommit(nextCommitHash);
-    }
-  };
-
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-vscode-bg animate-in fade-in slide-in-from-right-2 duration-200">
       <div className="px-3 pt-2 border-b border-vscode-border bg-vscode-sidebar/60 shrink-0">
@@ -117,13 +93,11 @@ export const CommitDetailPage: React.FC = () => {
             <div className="h-3.5 w-[1px] bg-vscode-border mx-0.5" />
 
             <button
-              onClick={handleNavigatePrevious}
-              disabled={!previousCommitHash && !canGoBackHistory}
+              onClick={() => older && selectCommit(older)}
+              disabled={!older}
               className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-300 hover:text-vscode-fg hover:bg-vscode-hover disabled:opacity-30 disabled:pointer-events-none transition font-medium"
               title={
-                previousCommitHash
-                  ? `Navigate to previous commit (${previousCommitHash.substring(0, 7)})`
-                  : 'No previous commit'
+                older ? `Previous commit, made before this one (${older.substring(0, 7)})` : 'This is the first commit'
               }
             >
               <ChevronLeft className="w-3.5 h-3.5" />
@@ -131,13 +105,11 @@ export const CommitDetailPage: React.FC = () => {
             </button>
 
             <button
-              onClick={handleNavigateNext}
-              disabled={!nextCommitHash && !canGoForwardHistory}
+              onClick={() => newer && selectCommit(newer)}
+              disabled={!newer}
               className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-300 hover:text-vscode-fg hover:bg-vscode-hover disabled:opacity-30 disabled:pointer-events-none transition font-medium"
               title={
-                nextCommitHash
-                  ? `Navigate to next commit (${nextCommitHash.substring(0, 7)})`
-                  : 'No next commit'
+                newer ? `Next commit, made after this one (${newer.substring(0, 7)})` : 'No newer commit on this branch'
               }
             >
               <span>Next</span>
@@ -149,6 +121,7 @@ export const CommitDetailPage: React.FC = () => {
             {commit ? (
               <>
                 <h2 className="text-sm font-semibold text-gray-100 truncate select-text" title={commit.subject}>
+                  <StarMark starred={starred} />
                   {commit.subject}
                 </h2>
                 <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap text-[11px] text-gray-400 mt-0.5">
@@ -180,15 +153,6 @@ export const CommitDetailPage: React.FC = () => {
                       ))}
                     </span>
                   )}
-                  {previousCommitHash && (
-                    <button
-                      onClick={handleNavigatePrevious}
-                      className="font-mono text-xs text-blue-400 hover:underline flex items-center gap-0.5 ml-1"
-                      title={`Back to previous commit (${previousCommitHash.substring(0, 7)})`}
-                    >
-                      <span>(← back to {previousCommitHash.substring(0, 7)})</span>
-                    </button>
-                  )}
                   {commit.isMerge && (
                     <span className="inline-flex items-center gap-1 px-1.5 rounded bg-purple-500/20 text-purple-500">
                       <GitMerge className="w-3 h-3" />
@@ -211,6 +175,13 @@ export const CommitDetailPage: React.FC = () => {
             )}
           </div>
 
+          {commit && (
+            <StarButton
+              hash={commit.hash}
+              size="w-4 h-4"
+              className="p-1.5 rounded-md text-gray-400 hover:text-vscode-fg hover:bg-vscode-hover transition"
+            />
+          )}
           <button
             onClick={close}
             className="p-1.5 rounded-md text-gray-400 hover:text-vscode-fg hover:bg-vscode-hover transition"

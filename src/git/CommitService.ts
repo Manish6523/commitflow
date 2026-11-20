@@ -143,6 +143,42 @@ export class CommitService {
   }
 
   /** Load full commits by hash, keeping the given order. */
+  /**
+   * The commits just before and after this one. Older is its first parent.
+   * Newer is the next commit on HEAD's first-parent line, else a child on the
+   * way to HEAD, else one on any branch, preferring a child that has it as
+   * first parent (the same line).
+   */
+  public static async getAdjacentCommits(
+    repoRoot: string,
+    hash: string
+  ): Promise<{ older: string | null; newer: string | null }> {
+    const run = async (args: string[]) => (await GitProcess.exec(args, { cwd: repoRoot })).stdout;
+    const full = (await run(['rev-parse', '--verify', '-q', `${hash}^{commit}`])).trim();
+    const parents = (await run(['rev-list', '--parents', '-n', '1', full])).trim().split(' ').slice(1);
+
+    const findChild = async (tips: string[]): Promise<string | null> => {
+      const lines = (await run(['rev-list', '--parents', '--ancestry-path', ...tips, `^${full}`, '--']))
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => line.split(' '));
+      const children = lines.filter(([, ...ps]) => ps.includes(full));
+      const sameLine = children.filter(([, firstParent]) => firstParent === full);
+      // rev-list lists newest first, so the last match is the closest child.
+      return (sameLine.length ? sameLine : children).at(-1)?.[0] ?? null;
+    };
+
+    // On HEAD's own line (following first parents), the next commit is unambiguous.
+    const mainLine = (await run(['rev-list', '--first-parent', '--parents', 'HEAD', `^${full}`, '--']).catch(() => ''))
+      .split('\n')
+      .filter(Boolean);
+    const closest = mainLine.at(-1)?.split(' ');
+    let newer = closest && closest[1] === full ? closest[0] : null;
+    if (!newer) newer = await findChild(['HEAD']).catch(() => null);
+    if (!newer) newer = await findChild(['--all']).catch(() => null);
+    return { older: parents[0] ?? null, newer };
+  }
+
   public static async getCommitsByHashes(repoRoot: string, hashes: string[]): Promise<GitCommit[]> {
     if (hashes.length === 0) return [];
     const res = await GitProcess.exec(

@@ -162,6 +162,9 @@ export class CommitFlowPanel {
   }
 
   public dispose(): void {
+    this.messageHandler.dispose();
+    // No commit is open any more, so the sidebar stops highlighting one.
+    vscode.commands.executeCommand('commitflow.internal.commitOpened', null);
     CommitFlowPanel.currentPanel = undefined;
     this.panel.dispose();
     while (this.disposables.length) {

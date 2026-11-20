@@ -85,6 +85,8 @@ export interface CommitFilterOptions {
   isMerge?: boolean;
   minFilesChanged?: number;
   filePath?: string;
+  /** Only starred commits. */
+  starred?: boolean;
 }
 
 export type ViewMode = 'grid' | 'list' | 'timeline' | 'graph' | 'branches' | 'fileHistory' | 'compare' | 'analytics' | 'settings';
@@ -211,6 +213,7 @@ export interface ScmState {
   status: WorkingTreeStatus | null;
   stashes: StashEntry[];
   commits: GitCommit[];
+  starred: string[];
 }
 
 export type ScmFileGroup = 'conflicts' | 'staged' | 'changes';

@@ -49,11 +49,11 @@ export class ScmController {
     if (!this.repositories.length) await this.discover();
     const repositories = this.repositories.map((r) => ({ name: r.name, root: r.rootUri }));
     const root = this.activeRoot;
-    if (!root) return { repositories, activeRoot: null, status: null, stashes: [], commits: [] };
+    if (!root) return { repositories, activeRoot: null, status: null, stashes: [], commits: [], starred: [] };
 
     const [status, stashes] = await Promise.all([SourceControlService.getStatus(root), SourceControlService.getStashes(root)]);
     const commits = await this.getGraphCommits(root, status.head !== null, status.upstream !== null).catch(() => []);
-    return { repositories, activeRoot: root, status, stashes, commits };
+    return { repositories, activeRoot: root, status, stashes, commits, starred: this.storageService.getStarred(root) };
   }
 
   /** Recent commits on this branch and, like VS Code's graph, the ones coming in from its upstream. */
@@ -196,6 +196,27 @@ export class ScmController {
 
     const after = file.status === 'D' ? at(null) : onDisk;
     await vscode.commands.executeCommand('vscode.diff', at(':0'), after, `${name} (Working Tree)`);
+  }
+
+  public async toggleStar(hash: string): Promise<void> {
+    if (this.activeRoot) await this.storageService.toggleStar(this.activeRoot, hash);
+  }
+
+  public async getCommitFiles(hash: string): Promise<WorkingFileChange[]> {
+    if (!this.activeRoot) return [];
+    return SourceControlService.getCommitFiles(this.activeRoot, hash);
+  }
+
+  /** Open one file's change in a commit, against the commit's first parent. */
+  public async openCommitFile(hash: string, parent: string | null, file: WorkingFileChange): Promise<void> {
+    const root = this.activeRoot;
+    if (!root) return;
+    const at = (ref: string | null, filePath = file.path) => RevisionContentProvider.toUri(root, ref, filePath);
+    const before = file.status === 'A' || !parent ? at(null) : at(parent, file.oldPath ?? file.path);
+    const after = file.status === 'D' ? at(null) : at(hash);
+    const short = (ref: string) => ref.slice(0, 7);
+    const title = `${path.basename(file.path)} (${parent ? short(parent) : 'none'} ↔ ${short(hash)})`;
+    await vscode.commands.executeCommand('vscode.diff', before, after, title, { preview: true });
   }
 
   public async generateCommitMessage(): Promise<{ message: string; source: 'ai' | 'local'; warning?: string }> {

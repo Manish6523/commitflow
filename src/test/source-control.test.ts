@@ -5,6 +5,9 @@ import * as os from 'os';
 import { SourceControlService, describeGitError, parseStatus } from '../git/SourceControlService';
 import { GitProcess, GitProcessError } from '../git/GitProcess';
 import { localCommitMessage } from '../services/AIService';
+import { CommitService } from '../git/CommitService';
+import { StorageService } from '../services/StorageService';
+import { SearchService } from '../services/SearchService';
 
 const svc = SourceControlService;
 const temps: string[] = [];
@@ -326,5 +329,117 @@ describe('messages', () => {
       ])
     ).toBe('chore: update a.ts and 2 other files');
     expect(localCommitMessage([])).toBe('');
+  });
+});
+
+describe('commit neighbours and files', () => {
+  it('finds the older and newer commit, staying on the same line through a merge', async () => {
+    const repo = await newRepo();
+    const commit = async (file: string, message: string) => {
+      write(repo, file, message);
+      await git(repo, 'add', '.');
+      await git(repo, 'commit', '-q', '-m', message);
+      return git(repo, 'rev-parse', 'HEAD');
+    };
+    const first = await git(repo, 'rev-parse', 'HEAD');
+    const second = await commit('a.txt', 'second');
+    await git(repo, 'checkout', '-q', '-b', 'side');
+    const side = await commit('side.txt', 'side');
+    await git(repo, 'checkout', '-q', 'main');
+    const third = await commit('b.txt', 'third');
+    await git(repo, 'merge', '-q', '--no-ff', 'side', '-m', 'merge side');
+    const merge = await git(repo, 'rev-parse', 'HEAD');
+
+    expect(await CommitService.getAdjacentCommits(repo, first)).toEqual({ older: null, newer: second });
+    // second has two children; "next" follows main, not the side branch.
+    expect(await CommitService.getAdjacentCommits(repo, second)).toEqual({ older: first, newer: third });
+    expect(await CommitService.getAdjacentCommits(repo, side)).toEqual({ older: second, newer: merge });
+    expect(await CommitService.getAdjacentCommits(repo, merge)).toEqual({ older: third, newer: null });
+
+    // A commit only on another branch still finds its newer commit there.
+    await git(repo, 'checkout', '-q', '-b', 'later', side);
+    const later = await commit('later.txt', 'later');
+    await git(repo, 'checkout', '-q', 'main');
+    expect((await CommitService.getAdjacentCommits(repo, later)).newer).toBeNull();
+    expect((await CommitService.getAdjacentCommits(repo, side.slice(0, 7))).older).toBe(second);
+  });
+
+  it('lists the files a commit changed, including renames, deletions and the first commit', async () => {
+    const repo = await newRepo();
+    expect(await svc.getCommitFiles(repo, 'HEAD')).toEqual([{ path: 'README.md', status: 'A' }]);
+
+    write(repo, 'keep.txt', 'keep');
+    write(repo, 'gone.txt', 'gone');
+    await git(repo, 'add', '.');
+    await git(repo, 'commit', '-q', '-m', 'add');
+    await git(repo, 'mv', 'README.md', 'docs file.md');
+    fs.rmSync(path.join(repo, 'gone.txt'));
+    write(repo, 'keep.txt', 'changed');
+    await git(repo, 'add', '-A');
+    await git(repo, 'commit', '-q', '-m', 'change');
+
+    const files = await svc.getCommitFiles(repo, 'HEAD');
+    expect(files).toEqual(
+      expect.arrayContaining([
+        { path: 'docs file.md', oldPath: 'README.md', status: 'R' },
+        { path: 'gone.txt', status: 'D' },
+        { path: 'keep.txt', status: 'M' },
+      ])
+    );
+    expect(files).toHaveLength(3);
+  });
+});
+
+describe('starred commits', () => {
+  const memento = () => {
+    const data = new Map<string, unknown>();
+    return {
+      get: (key: string, fallback?: unknown) => (data.has(key) ? data.get(key) : fallback),
+      update: async (key: string, value: unknown) => void data.set(key, value),
+      keys: () => [...data.keys()],
+    } as any;
+  };
+
+  it('stars and unstars per repository and tells listeners', async () => {
+    const storage = new StorageService(memento(), memento());
+    const changed: string[] = [];
+    const stop = storage.onStarsChanged((root) => changed.push(root));
+
+    expect(await storage.toggleStar('/repo/a', 'h1')).toEqual(['h1']);
+    await storage.toggleStar('/repo/a', 'h2');
+    await storage.toggleStar('/repo/b', 'h1');
+    expect(storage.getStarred('/repo/a')).toEqual(['h1', 'h2']);
+    expect(await storage.toggleStar('/repo/a', 'h1')).toEqual(['h2']);
+    expect(storage.getStarred('/repo/b')).toEqual(['h1']);
+    expect(changed).toEqual(['/repo/a', '/repo/a', '/repo/b', '/repo/a']);
+
+    stop();
+    await storage.toggleStar('/repo/a', 'h3');
+    expect(changed).toHaveLength(4);
+  });
+
+  it('limits listing and search to starred commits', async () => {
+    const repo = await newRepo();
+    const hashes: string[] = [];
+    for (const name of ['alpha', 'beta', 'gamma']) {
+      write(repo, `${name}.txt`, name);
+      await git(repo, 'add', '.');
+      await git(repo, 'commit', '-q', '-m', `feat: add ${name}`);
+      hashes.push(await git(repo, 'rev-parse', 'HEAD'));
+    }
+    const starred = new Set([hashes[0], hashes[2]]);
+
+    const all = await SearchService.search(repo, '', { onlyHashes: starred });
+    expect(all.commits.map((c) => c.subject)).toEqual(['feat: add gamma', 'feat: add alpha']);
+    expect(all.totalCount).toBe(2);
+
+    const search = await SearchService.search(repo, 'gamma', { onlyHashes: starred });
+    expect(search.commits.map((c) => c.subject)).toEqual(['feat: add gamma']);
+    expect((await SearchService.search(repo, 'beta', { onlyHashes: starred })).commits).toEqual([]);
+    expect((await SearchService.search(repo, '', { onlyHashes: new Set() })).totalCount).toBe(0);
+
+    const paged = await SearchService.search(repo, '', { onlyHashes: starred, page: 2, pageSize: 1 });
+    expect(paged.commits.map((c) => c.subject)).toEqual(['feat: add alpha']);
+    expect(paged.hasMore).toBe(false);
   });
 });

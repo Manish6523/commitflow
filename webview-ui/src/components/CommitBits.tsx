@@ -9,6 +9,7 @@ import {
   GitPullRequest,
   RotateCcw,
   ShieldCheck,
+  Star,
   Tag as TagIcon,
 } from 'lucide-react';
 import { useCommitStore } from '../stores/useCommitStore';
@@ -52,6 +53,40 @@ export const CommitStats: React.FC<{ commit: GitCommit }> = ({ commit }) => (
     <span className="text-rose-500">-{commit.deletions}</span>
   </span>
 );
+
+/** Whether a commit is starred, kept current as stars change. */
+export const useStarred = (hash: string | undefined) =>
+  useCommitStore((state) => (hash ? state.starred.includes(hash) : false));
+
+/** Gold left edge and tint for a starred commit's row or card. */
+export const starredClass = (starred: boolean) => (starred ? ' cf-starred' : '');
+
+/** A small filled star shown before a starred commit's message. */
+export const StarMark: React.FC<{ starred: boolean }> = ({ starred }) =>
+  starred ? (
+    <Star className="w-3 h-3 shrink-0 inline-block align-[-1px] mr-1 fill-amber-400 text-amber-400" aria-label="Starred" />
+  ) : null;
+
+/** A button that stars or unstars a commit. */
+export const StarButton: React.FC<{ hash: string; className?: string; size?: string }> = ({ hash, className, size = 'w-3.5 h-3.5' }) => {
+  const starred = useStarred(hash);
+  const toggleStar = useCommitStore((state) => state.toggleStar);
+  const label = starred ? 'Unstar commit' : 'Star commit';
+  return (
+    <button
+      onClick={(event) => {
+        event.stopPropagation();
+        toggleStar(hash);
+      }}
+      className={className ?? actionButton}
+      title={label}
+      aria-label={label}
+      aria-pressed={starred}
+    >
+      <Star className={`${size} ${starred ? 'fill-amber-400 text-amber-400' : ''}`} />
+    </button>
+  );
+};
 
 const actionButton =
   'p-1 rounded text-gray-300 hover:text-vscode-fg hover:bg-vscode-hover transition-colors';
@@ -114,6 +149,7 @@ export const CommitActions: React.FC<{ commit: GitCommit }> = ({ commit }) => {
       onClick={(event) => event.stopPropagation()}
       className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center gap-0.5 p-0.5 rounded-md border border-vscode-border bg-vscode-sidebar shadow-sm opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto transition-opacity duration-100"
     >
+      <StarButton hash={commit.hash} />
       {buttons.map((button) => (
         <button
           key={button.label}

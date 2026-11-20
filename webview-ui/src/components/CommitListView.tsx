@@ -2,10 +2,11 @@ import React from 'react';
 import { GitCommit } from '../types';
 import { useCommitStore } from '../stores/useCommitStore';
 import { timeAgo } from '../utils/fileHistory';
-import { CommitActions, CommitStats, RefBadges } from './CommitBits';
+import { CommitActions, CommitStats, RefBadges, StarMark, starredClass } from './CommitBits';
 
 export const CommitListView: React.FC<{ commits: GitCommit[] }> = ({ commits }) => {
   const selectCommit = useCommitStore((state) => state.selectCommit);
+  const starred = useCommitStore((state) => state.starred);
 
   return (
     <div className="w-full text-xs">
@@ -21,11 +22,12 @@ export const CommitListView: React.FC<{ commits: GitCommit[] }> = ({ commits }) 
         <div
           key={commit.hash}
           onClick={() => selectCommit(commit.hash)}
-          className="group relative flex items-center gap-3 px-3 py-1 cursor-pointer hover:bg-vscode-hover transition-colors duration-100"
+          className={`group relative flex items-center gap-3 px-3 py-1 cursor-pointer hover:bg-vscode-hover transition-colors duration-100${starredClass(starred.includes(commit.hash))}`}
         >
           <span className="w-16 shrink-0 font-mono text-[11px] text-gray-400">{commit.shortHash}</span>
           <span className="flex-1 min-w-0 flex items-center gap-1.5">
             <span className="truncate font-medium text-gray-200" title={commit.subject}>
+              <StarMark starred={starred.includes(commit.hash)} />
               {commit.subject}
             </span>
             <RefBadges commit={commit} limit={1} />

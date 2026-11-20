@@ -61,6 +61,14 @@ export const App: React.FC = () => {
       if (!msg) return;
 
       switch (msg.type) {
+        case 'STARRED_LOADED': {
+          const store = useCommitStore.getState();
+          useCommitStore.setState({ starred: msg.hashes });
+          // A star removed elsewhere should drop out of a Starred list here.
+          if (store.filters.starred) store.loadCommits(store.page);
+          break;
+        }
+
         case 'REPOSITORIES_LOADED': {
           const previous = useCommitStore.getState().activeRepo;
           useCommitStore.setState({
@@ -175,9 +183,22 @@ export const App: React.FC = () => {
       }
     };
 
+    // Tell the sidebar which commit is open, so its graph can highlight it.
+    let openHash: string | null = null;
+    const stopWatching = useCommitStore.subscribe((state) => {
+      const hash = state.selectedCommitDetails?.hash ?? null;
+      if (hash !== openHash) {
+        openHash = hash;
+        vscode.postMessage({ type: 'COMMIT_OPENED', hash });
+      }
+    });
+
     window.addEventListener('message', handleExtensionMessage);
     vscode.postMessage({ type: 'WEBVIEW_READY' });
-    return () => window.removeEventListener('message', handleExtensionMessage);
+    return () => {
+      stopWatching();
+      window.removeEventListener('message', handleExtensionMessage);
+    };
   }, []);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));

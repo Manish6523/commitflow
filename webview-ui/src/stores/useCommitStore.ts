@@ -86,8 +86,6 @@ interface CommitStoreState {
   trackedFiles: string[] | null;
   diffLayout: DiffLayout;
   pendingConfirm: ConfirmRequest | null;
-  commitNavHistory: string[];
-  commitNavIndex: number;
 
   // Actions
   requestConfirm: (request: ConfirmRequest | null) => void;
@@ -109,8 +107,9 @@ interface CommitStoreState {
   loadRepositories: () => void;
   loadCommits: (page?: number) => void;
   selectCommit: (hash: string | null) => void;
-  navigateCommitHistory: (direction: 'back' | 'forward') => void;
-  navigateToAdjacentCommit: (direction: 'newer' | 'older') => void;
+  /** Full hashes of the commits starred in this repository. */
+  starred: string[];
+  toggleStar: (hash: string) => void;
   loadBranchesAndTags: () => void;
   loadAnalytics: () => void;
   compareCommits: (baseHash: string, targetHash: string) => void;
@@ -133,6 +132,7 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
   filters: {},
   selectedCommitDetails: null,
   loadingDetails: false,
+  starred: [],
   branches: [],
   tags: [],
   analytics: null,
@@ -145,8 +145,6 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
   trackedFiles: null,
   diffLayout: vscode.getState<{ diffLayout?: DiffLayout }>()?.diffLayout ?? 'split',
   pendingConfirm: null,
-  commitNavHistory: [],
-  commitNavIndex: -1,
 
   requestConfirm: (pendingConfirm) => set({ pendingConfirm }),
 
@@ -203,50 +201,20 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
     );
   },
 
+  toggleStar: (hash) => {
+    // Show it at once; the extension saves it and confirms with STARRED_LOADED.
+    const { starred } = get();
+    set({ starred: starred.includes(hash) ? starred.filter((h) => h !== hash) : [...starred, hash] });
+    vscode.postMessage({ type: 'TOGGLE_STAR', hash });
+  },
+
   selectCommit: (hash: string | null) => {
     if (!hash) {
-      set({ selectedCommitDetails: null, commitNavHistory: [], commitNavIndex: -1 });
+      set({ selectedCommitDetails: null });
       return;
     }
-    const { commitNavHistory, commitNavIndex } = get();
-    let nextHistory = commitNavHistory;
-    let nextIndex = commitNavIndex;
-    if (commitNavIndex >= 0 && commitNavHistory[commitNavIndex] === hash) {
-      // already current
-    } else {
-      nextHistory = [...commitNavHistory.slice(0, commitNavIndex + 1), hash];
-      nextIndex = nextHistory.length - 1;
-    }
-    set({ loadingDetails: true, commitNavHistory: nextHistory, commitNavIndex: nextIndex });
+    set({ loadingDetails: true });
     vscode.postMessage({ type: 'GET_COMMIT_DETAILS', hash });
-  },
-
-  navigateCommitHistory: (direction: 'back' | 'forward') => {
-    const { commitNavHistory, commitNavIndex } = get();
-    const targetIndex = direction === 'back' ? commitNavIndex - 1 : commitNavIndex + 1;
-    if (targetIndex >= 0 && targetIndex < commitNavHistory.length) {
-      const targetHash = commitNavHistory[targetIndex];
-      set({ loadingDetails: true, commitNavIndex: targetIndex });
-      vscode.postMessage({ type: 'GET_COMMIT_DETAILS', hash: targetHash });
-    }
-  },
-
-  navigateToAdjacentCommit: (direction: 'newer' | 'older') => {
-    const { commits, selectedCommitDetails } = get();
-    if (!selectedCommitDetails) return;
-    const currentIndex = commits.findIndex((c) => c.hash === selectedCommitDetails.hash);
-    if (currentIndex === -1) {
-      if (direction === 'older' && selectedCommitDetails.parentHashes.length > 0) {
-        get().selectCommit(selectedCommitDetails.parentHashes[0]);
-      }
-      return;
-    }
-    const targetIndex = direction === 'newer' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex >= 0 && targetIndex < commits.length) {
-      get().selectCommit(commits[targetIndex].hash);
-    } else if (direction === 'older' && selectedCommitDetails.parentHashes.length > 0) {
-      get().selectCommit(selectedCommitDetails.parentHashes[0]);
-    }
   },
 
   loadBranchesAndTags: () => {
@@ -400,6 +368,5 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
       params,
     });
   },
-
 }));
 

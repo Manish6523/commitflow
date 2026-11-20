@@ -39,10 +39,12 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
     onHistoryChanged: () => void
   ) {
     this.controller = new ScmController(storageService, aiService, onHistoryChanged);
+    const stopListening = storageService.onStarsChanged(() => this.refresh());
 
     const watcher = vscode.workspace.createFileSystemWatcher('**/*');
     const schedule = () => this.scheduleRefresh();
     this.disposables.push(
+      { dispose: stopListening },
       watcher,
       watcher.onDidChange(schedule),
       watcher.onDidCreate(schedule),
@@ -143,6 +145,14 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
     }
   }
 
+  /** The commit open in the dashboard, which the graph highlights. */
+  private openCommit: string | null = null;
+
+  public setOpenCommit(hash: string | null): void {
+    this.openCommit = hash;
+    this.post({ type: 'SCM_OPEN_COMMIT', hash });
+  }
+
   private scheduleRefresh(): void {
     clearTimeout(this.refreshTimer);
     this.refreshTimer = setTimeout(() => this.refresh(), REFRESH_DELAY_MS);
@@ -168,6 +178,7 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
         case 'WEBVIEW_READY':
         case 'SCM_GET_STATE':
           await this.refresh();
+          this.post({ type: 'SCM_OPEN_COMMIT', hash: this.openCommit });
           break;
 
         case 'SCM_SELECT_REPOSITORY':
@@ -194,6 +205,20 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
           this.post({ type: 'COMMIT_MESSAGE_GENERATED', ...result, requestId });
           break;
         }
+
+        case 'SCM_COMMIT_FILES': {
+          const files = await this.controller.getCommitFiles(message.hash);
+          this.post({ type: 'SCM_COMMIT_FILES_LOADED', hash: message.hash, files, requestId });
+          break;
+        }
+
+        case 'TOGGLE_STAR':
+          await this.controller.toggleStar(message.hash);
+          break;
+
+        case 'SCM_OPEN_COMMIT_FILE':
+          await this.controller.openCommitFile(message.hash, message.parent, message.file);
+          break;
 
         case 'SCM_FILE_HISTORY': {
           const root = this.controller.root;

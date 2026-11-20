@@ -267,6 +267,25 @@ export class SourceControlService {
     return { files: status.unstaged, diff };
   }
 
+  /** The files a commit changed, compared with its first parent. */
+  public static async getCommitFiles(repoRoot: string, hash: string): Promise<WorkingFileChange[]> {
+    const output = await git(repoRoot, ['log', '-1', '--format=', '--name-status', '-z', '-M', '--diff-merges=first-parent', hash, '--']);
+    const fields = output.split('\0');
+    const files: WorkingFileChange[] = [];
+    for (let i = 0; i < fields.length; ) {
+      const code = fields[i++]?.trim();
+      if (!code) continue;
+      const letter = code[0];
+      if (letter === 'R' || letter === 'C') {
+        const oldPath = fields[i++];
+        files.push({ path: fields[i++], oldPath, status: letter });
+      } else {
+        files.push({ path: fields[i++], status: toStatus(letter === 'T' ? 'M' : letter) });
+      }
+    }
+    return files.filter((f) => f.path);
+  }
+
   private static async hasCommits(repoRoot: string): Promise<boolean> {
     return git(repoRoot, ['rev-parse', '--verify', '-q', 'HEAD']).then(
       () => true,

@@ -180,7 +180,13 @@ export class SearchService {
   public static async search(
     repoRoot: string,
     query: string,
-    options: { filters?: CommitFilterOptions; page?: number; pageSize?: number } = {}
+    options: {
+      filters?: CommitFilterOptions;
+      page?: number;
+      pageSize?: number;
+      /** Only return these commits, such as the starred ones. */
+      onlyHashes?: Set<string>;
+    } = {}
   ): Promise<SearchResult> {
     const parsed = this.parseQuery(query);
     const page = Math.max(1, options.page ?? 1);
@@ -196,6 +202,7 @@ export class SearchService {
     if (parsed.hash) {
       const hash = await this.resolveCommit(repoRoot, parsed.hash);
       if (hash && terms.length === 0) {
+        if (options.onlyHashes && !options.onlyHashes.has(hash)) return empty;
         const commits = await CommitService.getCommitsByHashes(repoRoot, [hash]);
         return { commits, totalCount: commits.length, hasMore: false };
       }
@@ -203,7 +210,8 @@ export class SearchService {
       terms.push(parsed.hash);
     }
 
-    if (terms.length === 0 && !parsed.tag && !parsed.codeChange) {
+    if (options.onlyHashes?.size === 0) return empty;
+    if (terms.length === 0 && !parsed.tag && !parsed.codeChange && !options.onlyHashes) {
       return CommitService.getCommits(repoRoot, { filters, page, pageSize });
     }
 
@@ -212,7 +220,10 @@ export class SearchService {
       codeChange: parsed.codeChange,
     });
     const matches = records.filter(
-      (record) => matchesTerms(record, terms) && (!parsed.tag || matchesTag(record, parsed.tag))
+      (record) =>
+        (!options.onlyHashes || options.onlyHashes.has(record.hash)) &&
+        matchesTerms(record, terms) &&
+        (!parsed.tag || matchesTag(record, parsed.tag))
     );
 
     const start = (page - 1) * pageSize;

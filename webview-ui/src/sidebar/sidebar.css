@@ -450,3 +450,27 @@
     transform: rotate(360deg);
   }
 }
+
+/* An expanded commit in the graph, outlined like VS Code's. */
+.scm-commit.is-open {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+  border-radius: 3px;
+}
+
+/* A starred commit: the same gold edge and tint as in the dashboard. */
+.scm-commit.is-starred {
+  box-shadow: inset 3px 0 0 #f5b301;
+  background-image: linear-gradient(rgba(245, 179, 1, 0.09), rgba(245, 179, 1, 0.09));
+}
+
+/* The commit open in the dashboard. */
+.scm-commit.is-current {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.scm-commit.is-current .scm-muted {
+  color: inherit;
+  opacity: 0.8;
+}

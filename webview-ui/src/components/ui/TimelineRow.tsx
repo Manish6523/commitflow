@@ -1,6 +1,8 @@
 import React from 'react';
 
 interface TimelineRowProps {
+  /** Extra classes, such as the starred style. */
+  className?: string;
   active?: boolean;
   isLast: boolean;
   dotClass: string;
@@ -20,13 +22,14 @@ export const TimelineRow: React.FC<TimelineRowProps> = ({
   actions,
   onClick,
   rowProps,
+  className = '',
 }) => (
   <div
     {...rowProps}
     onClick={onClick}
     className={`group relative flex gap-2.5 pl-3 pr-2 py-1.5 cursor-pointer transition-colors duration-100 ${
       active ? 'bg-vscode-active text-vscode-activeFg' : 'hover:bg-vscode-hover'
-    }`}
+    }${className}`}
   >
     <div className="relative w-2.5 shrink-0">
       {!isLast && <div className="absolute left-[4.5px] top-3 -bottom-3.5 w-px bg-vscode-border" />}

@@ -5,6 +5,10 @@ export class StorageService {
   private static readonly SAVED_FILTERS_KEY = 'commitflow.savedFilters';
   private static readonly LAST_VIEW_KEY = 'commitflow.lastViewMode';
   private static readonly LAST_REPO_KEY = 'commitflow.lastRepository';
+  /** Starred commits, as full hashes, for each repository root. Kept across workspaces. */
+  private static readonly STARRED_KEY = 'commitflow.starredCommits';
+
+  private readonly starListeners = new Set<(repoRoot: string) => void>();
 
   constructor(
     private readonly workspaceState: vscode.Memento,
@@ -47,6 +51,26 @@ export class StorageService {
     const updated = filters.filter((f) => f.id !== id);
     await this.workspaceState.update(StorageService.SAVED_FILTERS_KEY, updated);
     return updated;
+  }
+
+  public getStarred(repoRoot: string): string[] {
+    return this.globalState.get<Record<string, string[]>>(StorageService.STARRED_KEY, {})[repoRoot] ?? [];
+  }
+
+  /** Star or unstar a commit, and tell every view. Returns the new list. */
+  public async toggleStar(repoRoot: string, hash: string): Promise<string[]> {
+    const all = this.globalState.get<Record<string, string[]>>(StorageService.STARRED_KEY, {});
+    const current = all[repoRoot] ?? [];
+    const next = current.includes(hash) ? current.filter((h) => h !== hash) : [...current, hash];
+    await this.globalState.update(StorageService.STARRED_KEY, { ...all, [repoRoot]: next });
+    this.starListeners.forEach((listener) => listener(repoRoot));
+    return next;
+  }
+
+  /** Listen for stars changing. Returns a function that stops listening. */
+  public onStarsChanged(listener: (repoRoot: string) => void): () => void {
+    this.starListeners.add(listener);
+    return () => this.starListeners.delete(listener);
   }
 
   public getLastRepository(): string | undefined {

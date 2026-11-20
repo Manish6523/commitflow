@@ -28,9 +28,15 @@ export interface GraphLayout {
  */
 export function layoutGraph(
   commits: GitCommit[],
-  geometry: { rowHeight: number; laneWidth: number; leftPad: number }
+  geometry: {
+    rowHeight: number;
+    laneWidth: number;
+    leftPad: number;
+    /** The y of each commit's centre, when rows aren't all one height. */
+    rowCenter?: (index: number) => number;
+  }
 ): GraphLayout {
-  const { rowHeight, laneWidth, leftPad } = geometry;
+  const { rowHeight, laneWidth, leftPad, rowCenter } = geometry;
   const commitIndexMap = new Map<string, number>();
   commits.forEach((c, idx) => commitIndexMap.set(c.hash, idx));
 
@@ -67,7 +73,7 @@ export function layoutGraph(
       commit,
       lane,
       x: leftPad + lane * laneWidth,
-      y: rowIndex * rowHeight + rowHeight / 2,
+      y: rowCenter ? rowCenter(rowIndex) : rowIndex * rowHeight + rowHeight / 2,
       parentCoords: [],
     });
   });

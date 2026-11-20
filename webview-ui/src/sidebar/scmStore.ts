@@ -16,6 +16,8 @@ interface Saved {
 
 interface ScmStore extends Saved {
   scm: ScmState | null;
+  /** The commit open in the dashboard, highlighted in the graph. */
+  openCommit: string | null;
   /** The action in progress, so its button can show it's working. */
   busy: ScmAction['kind'] | null;
   generating: boolean;
@@ -47,6 +49,7 @@ export const useScmStore = create<ScmStore>((set, get) => {
 
   return {
     scm: null,
+    openCommit: null,
     busy: null,
     generating: false,
     selection: [],
@@ -148,4 +151,5 @@ export const useScmStore = create<ScmStore>((set, get) => {
 // The extension pushes fresh state whenever the repository changes.
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'SCM_STATE') useScmStore.getState().receive(event.data.state);
+  if (event.data?.type === 'SCM_OPEN_COMMIT') useScmStore.setState({ openCommit: event.data.hash });
 });

@@ -19,11 +19,33 @@ export class MessageHandler {
   private activeRepo: RepositoryInfo | null = null;
   private repositories: RepositoryInfo[] = [];
 
+  private readonly stopListening: () => void;
+
   constructor(
     private readonly target: { webview: vscode.Webview },
     private readonly storageService: StorageService,
     private readonly aiService: AIService
-  ) {}
+  ) {
+    // A star added in the sidebar or another view shows up here too.
+    this.stopListening = storageService.onStarsChanged((repoRoot) => {
+      if (repoRoot === this.activeRepo?.rootUri) this.postStarred();
+    });
+  }
+
+  public dispose(): void {
+    this.stopListening();
+  }
+
+  private postStarred(requestId?: string): void {
+    const hashes = this.activeRepo ? this.storageService.getStarred(this.activeRepo.rootUri) : [];
+    this.postMessage({ type: 'STARRED_LOADED', hashes, requestId });
+  }
+
+  /** The starred commits to limit results to, when the Starred filter is on. */
+  private starredFilter(filters?: { starred?: boolean }): Set<string> | undefined {
+    if (!filters?.starred || !this.activeRepo) return undefined;
+    return new Set(this.storageService.getStarred(this.activeRepo.rootUri));
+  }
 
   public getActiveRepository(): RepositoryInfo | null {
     return this.activeRepo;
@@ -46,6 +68,7 @@ export class MessageHandler {
             activeRepo: this.activeRepo,
             requestId,
           });
+          this.postStarred();
           break;
         }
 
@@ -60,6 +83,7 @@ export class MessageHandler {
               activeRepo: this.activeRepo,
               requestId,
             });
+            this.postStarred();
           }
           break;
         }
@@ -80,12 +104,20 @@ export class MessageHandler {
             return;
           }
 
-          const res = await CommitService.getCommits(this.activeRepo.rootUri, {
-            page: message.page,
-            pageSize: message.pageSize,
-            filters: message.filters,
-            branch: message.branch,
-          });
+          const onlyHashes = this.starredFilter(message.filters);
+          const res = onlyHashes
+            ? await SearchService.search(this.activeRepo.rootUri, '', {
+                filters: message.filters,
+                page: message.page,
+                pageSize: message.pageSize,
+                onlyHashes,
+              })
+            : await CommitService.getCommits(this.activeRepo.rootUri, {
+                page: message.page,
+                pageSize: message.pageSize,
+                filters: message.filters,
+                branch: message.branch,
+              });
 
           this.postMessage({
             type: 'COMMITS_LOADED',
@@ -107,6 +139,7 @@ export class MessageHandler {
             filters: message.filters,
             page: message.page,
             pageSize: message.pageSize,
+            onlyHashes: this.starredFilter(message.filters),
           });
 
           this.postMessage({
@@ -129,6 +162,29 @@ export class MessageHandler {
             details,
             requestId,
           });
+          break;
+        }
+
+        case 'COMMIT_OPENED':
+          await vscode.commands.executeCommand('commitflow.internal.commitOpened', message.hash);
+          break;
+
+        case 'GET_STARRED': {
+          await this.requireActiveRepo();
+          this.postStarred(requestId);
+          break;
+        }
+
+        case 'TOGGLE_STAR': {
+          const repo = await this.requireActiveRepo();
+          await this.storageService.toggleStar(repo.rootUri, message.hash);
+          break;
+        }
+
+        case 'GET_ADJACENT_COMMITS': {
+          const repo = await this.requireActiveRepo();
+          const adjacent = await CommitService.getAdjacentCommits(repo.rootUri, message.hash);
+          this.postMessage({ type: 'ADJACENT_COMMITS', hash: message.hash, ...adjacent, requestId });
           break;
         }
 

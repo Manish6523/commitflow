@@ -1,5 +1,7 @@
-import React, { useMemo } from 'react';
-import { GitCommit, StashEntry } from '../types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { GitCommit, StashEntry, WorkingFileChange } from '../types';
+import { fileName, folderOf, sortByPath } from './changeTree';
+import { fileIcon } from './fileIcons';
 import { vscode } from '../vscode';
 import { timeAgo } from '../utils/fileHistory';
 import { LANE_COLORS, edgePath, layoutGraph } from '../utils/graphLayout';
@@ -39,16 +41,71 @@ export const StashPane: React.FC<{ stashes: StashEntry[] }> = ({ stashes }) => {
   );
 };
 
-/** Recent history of the current branch, with lanes for merges, like VS Code's Graph. */
-export const GraphPane: React.FC<{ commits: GitCommit[] }> = ({ commits }) => {
-  const { collapsed, toggleSection, run } = useScmStore();
+type CommitFiles = WorkingFileChange[] | 'loading' | 'failed';
+
+/**
+ * Recent history with lanes for merges, like VS Code's Graph. Clicking a commit
+ * lists the files it changed underneath; clicking a file opens its diff.
+ */
+export const GraphPane: React.FC<{ commits: GitCommit[]; starred: string[] }> = ({ commits, starred }) => {
+  const { collapsed, toggleSection, run, openCommit } = useScmStore();
   const open = !collapsed.graph;
+  const currentRow = useRef<HTMLDivElement>(null);
+  // Bring the commit open in the dashboard into view.
+  useEffect(() => {
+    currentRow.current?.scrollIntoView({ block: 'nearest' });
+  }, [openCommit, open]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [files, setFiles] = useState<Record<string, CommitFiles>>({});
+
+  // How many rows sit under each expanded commit, so lanes stretch past them.
+  const extraRows = (hash: string) => {
+    if (!expanded.has(hash)) return 0;
+    const list = files[hash];
+    return Array.isArray(list) ? Math.max(1, list.length) : 1;
+  };
+  const centers = useMemo(() => {
+    let top = 0;
+    return commits.map((commit) => {
+      const center = top + ROW_HEIGHT / 2;
+      top += ROW_HEIGHT * (1 + extraRows(commit.hash));
+      return center;
+    });
+  }, [commits, expanded, files]);
+  const totalHeight = commits.reduce((sum, c) => sum + ROW_HEIGHT * (1 + extraRows(c.hash)), 0);
+
   const { nodes, totalLanes } = useMemo(
-    () => layoutGraph(commits, { rowHeight: ROW_HEIGHT, laneWidth: LANE_WIDTH, leftPad: LEFT_PAD }),
-    [commits]
+    () =>
+      layoutGraph(commits, {
+        rowHeight: ROW_HEIGHT,
+        laneWidth: LANE_WIDTH,
+        leftPad: LEFT_PAD,
+        rowCenter: (index) => centers[index],
+      }),
+    [commits, centers]
   );
   const width = LEFT_PAD + totalLanes * LANE_WIDTH;
-  const openCommit = (hash: string) => vscode.postMessage({ type: 'OPEN_DASHBOARD', hash });
+  const openInDashboard = (hash: string) => vscode.postMessage({ type: 'OPEN_DASHBOARD', hash });
+
+  const toggle = (hash: string) => {
+    const next = new Set(expanded);
+    if (next.has(hash)) {
+      next.delete(hash);
+    } else {
+      next.add(hash);
+      if (!Array.isArray(files[hash])) {
+        setFiles((prev) => ({ ...prev, [hash]: 'loading' }));
+        vscode
+          .request<{ files: WorkingFileChange[] }>({ type: 'SCM_COMMIT_FILES', hash })
+          .then((res) => setFiles((prev) => ({ ...prev, [hash]: res.files })))
+          .catch(() => setFiles((prev) => ({ ...prev, [hash]: 'failed' })));
+      }
+    }
+    setExpanded(next);
+  };
+
+  const openFile = (commit: GitCommit, file: WorkingFileChange) =>
+    vscode.postMessage({ type: 'SCM_OPEN_COMMIT_FILE', hash: commit.hash, parent: commit.parentHashes[0] ?? null, file });
 
   return (
     <section>
@@ -59,7 +116,7 @@ export const GraphPane: React.FC<{ commits: GitCommit[] }> = ({ commits }) => {
       {open && commits.length === 0 && <div className="scm-empty">No commits yet</div>}
       {open && commits.length > 0 && (
         <div style={{ position: 'relative' }}>
-          <svg width={width} height={nodes.length * ROW_HEIGHT} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} aria-hidden="true">
+          <svg width={width} height={totalHeight} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} aria-hidden="true">
             {nodes.map((node) =>
               node.parentCoords.map((parent, i) => (
                 <path key={`${node.commit.hash}-${i}`} d={edgePath(node, parent)} fill="none" stroke={LANE_COLORS[node.lane % LANE_COLORS.length]} strokeWidth={1.5} />
@@ -77,35 +134,100 @@ export const GraphPane: React.FC<{ commits: GitCommit[] }> = ({ commits }) => {
               />
             ))}
           </svg>
-          {nodes.map(({ commit }) => (
-            <div
-              key={commit.hash}
-              className="scm-row"
-              tabIndex={0}
-              style={{ paddingLeft: width + 4 }}
-              data-vscode-context={JSON.stringify({ webviewSection: 'commit', hash: commit.hash, preventDefaultContextMenuItems: true })}
-              title={`${commit.shortHash} • ${commit.author.name} • ${new Date(commit.author.timestamp).toLocaleString()}\n\n${commit.subject}`}
-              onClick={() => openCommit(commit.hash)}
-              onKeyDown={(e) => e.key === 'Enter' && openCommit(commit.hash)}
-            >
-              <span className="scm-truncate" style={{ flex: '1 1 60%', minWidth: 48 }}>
-                {commit.subject}
-              </span>
-              {commit.branches.slice(0, 1).map((branch) => (
-                <span key={branch} className="scm-ref" style={{ background: 'var(--vscode-badge-background)', color: 'var(--vscode-badge-foreground)' }} title={branch}>
-                  <Icon name={branch.includes('/') ? 'cloud' : 'git-branch'} />
-                  <span className="scm-truncate">{branch}</span>
-                </span>
-              ))}
-              {commit.tags.slice(0, 1).map((tag) => (
-                <span key={tag} className="scm-ref" style={{ border: '1px solid var(--vscode-badge-background)' }} title={tag}>
-                  <Icon name="tag" />
-                  <span className="scm-truncate">{tag}</span>
-                </span>
-              ))}
-              <span className="scm-muted scm-truncate scm-graph-author">{commit.author.name}</span>
-            </div>
-          ))}
+          {nodes.map(({ commit, lane }) => {
+            const isOpen = expanded.has(commit.hash);
+            const isStarred = starred.includes(commit.hash);
+            const isCurrent = commit.hash === openCommit;
+            const list = files[commit.hash];
+            const laneX = LEFT_PAD + lane * LANE_WIDTH;
+            return (
+              <React.Fragment key={commit.hash}>
+                <div
+                  ref={isCurrent ? currentRow : undefined}
+                  aria-current={isCurrent || undefined}
+                  className={`scm-row scm-commit${isOpen ? ' is-open' : ''}${isStarred ? ' is-starred' : ''}${isCurrent ? ' is-current' : ''}`}
+                  role="treeitem"
+                  aria-expanded={isOpen}
+                  tabIndex={0}
+                  style={{ paddingLeft: width + 4 }}
+                  data-vscode-context={JSON.stringify({ webviewSection: 'commit', hash: commit.hash, preventDefaultContextMenuItems: true })}
+                  title={`${commit.shortHash} • ${commit.author.name} • ${new Date(commit.author.timestamp).toLocaleString()}\n\n${commit.subject}\n\nClick to see the files it changed.`}
+                  onClick={() => toggle(commit.hash)}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggle(commit.hash);
+                    }
+                  }}
+                >
+                  <span className="scm-truncate" style={{ flex: '1 1 60%', minWidth: 48 }}>
+                    {isStarred && <Icon name="star-full" style={{ fontSize: 12, color: '#f5b301', marginRight: 4, verticalAlign: -1 }} />}
+                    {commit.subject}
+                  </span>
+                  {commit.branches.slice(0, 1).map((branch) => (
+                    <span key={branch} className="scm-ref" style={{ background: 'var(--vscode-badge-background)', color: 'var(--vscode-badge-foreground)' }} title={branch}>
+                      <Icon name={branch.includes('/') ? 'cloud' : 'git-branch'} />
+                      <span className="scm-truncate">{branch}</span>
+                    </span>
+                  ))}
+                  {commit.tags.slice(0, 1).map((tag) => (
+                    <span key={tag} className="scm-ref" style={{ border: '1px solid var(--vscode-badge-background)' }} title={tag}>
+                      <Icon name="tag" />
+                      <span className="scm-truncate">{tag}</span>
+                    </span>
+                  ))}
+                  <span className="scm-muted scm-truncate scm-graph-author">{commit.author.name}</span>
+                  <span className="scm-actions">
+                    <IconButton
+                      icon={isStarred ? 'star-full' : 'star-empty'}
+                      label={isStarred ? 'Unstar Commit' : 'Star Commit'}
+                      onClick={() => vscode.postMessage({ type: 'TOGGLE_STAR', hash: commit.hash })}
+                    />
+                    <IconButton icon="link-external" label="Open in CommitFlow" onClick={() => openInDashboard(commit.hash)} />
+                  </span>
+                </div>
+
+                {isOpen && !Array.isArray(list) && (
+                  <div className="scm-row scm-muted" style={{ paddingLeft: Math.max(width, laneX + 12) + 8 }}>
+                    {list === 'failed' ? 'Couldn’t list the files.' : <Icon name="loading scm-spin" />}
+                  </div>
+                )}
+                {isOpen && Array.isArray(list) && list.length === 0 && (
+                  <div className="scm-row scm-muted" style={{ paddingLeft: Math.max(width, laneX + 12) + 8 }}>
+                    No file changes
+                  </div>
+                )}
+                {isOpen &&
+                  Array.isArray(list) &&
+                  sortByPath(list).map((file) => {
+                    const icon = fileIcon(file.path);
+                    const color = `var(--decor-${file.status})`;
+                    return (
+                      <div
+                        key={file.path}
+                        className={`scm-row${file.status === 'D' ? ' is-deleted' : ''}`}
+                        role="treeitem"
+                        tabIndex={0}
+                        style={{ paddingLeft: Math.max(width, laneX + 12) + 8 }}
+                        title={`${file.oldPath ? `${file.oldPath} → ` : ''}${file.path}\n\nClick to see this file’s change in ${commit.shortHash}.`}
+                        onClick={() => openFile(commit, file)}
+                        onKeyDown={(e) => e.key === 'Enter' && openFile(commit, file)}
+                      >
+                        <Icon name={icon.icon} style={{ color: icon.color }} />
+                        <span className="scm-name scm-truncate" style={{ color, flexShrink: 0, maxWidth: '65%' }}>
+                          {fileName(file.path)}
+                        </span>
+                        <span className="scm-dir scm-truncate">{folderOf(file.path)}</span>
+                        <span className="scm-letter" style={{ color }}>
+                          {file.status}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </React.Fragment>
+            );
+          })}
         </div>
       )}
     </section>

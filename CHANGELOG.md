@@ -2,6 +2,18 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
+## [0.4.1] - 2026-11-20
+
+### Added
+
+- **Star commits** to mark the ones you've checked. Click the ☆ in a commit's hover buttons, on its page, or in the sidebar graph. Starred commits get a gold edge and a ★ in every view, and the **★ Starred** option in the commits filter shows only them. Stars are saved on your computer for each repository and don't change Git history.
+- The commit open in the dashboard is highlighted in the sidebar graph, which scrolls to it.
+- Click a commit in the sidebar graph to list the files it changed underneath it, like VS Code's own Graph. Click a file to see its diff in that commit. The button on hover still opens the commit in the dashboard.
+
+### Changed
+
+- Previous and Next on a commit's page now go to the commit made just before or just after it, following the current branch, wherever you opened it from. The "back to" link is gone.
+
 ## [0.4.0] - 2026-11-19
 
 ### Added

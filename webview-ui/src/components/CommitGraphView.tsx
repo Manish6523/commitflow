@@ -3,7 +3,7 @@ import { GitCommit } from '../types';
 import { useCommitStore } from '../stores/useCommitStore';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { timeAgo } from '../utils/fileHistory';
-import { CommitActions, RefBadges } from './CommitBits';
+import { CommitActions, RefBadges, StarMark, starredClass } from './CommitBits';
 import { iconButton } from './ui/styles';
 import { LANE_COLORS, edgePath, layoutGraph } from '../utils/graphLayout';
 
@@ -16,7 +16,7 @@ const LANE_WIDTH = 20;
 const GRAPH_LEFT_PAD = 30;
 
 export const CommitGraphView: React.FC<CommitGraphViewProps> = ({ commits }) => {
-  const { selectCommit } = useCommitStore();
+  const { selectCommit, starred } = useCommitStore();
   const [zoom, setZoom] = useState(1);
 
   const { nodes, totalLanes } = useMemo(
@@ -132,10 +132,11 @@ export const CommitGraphView: React.FC<CommitGraphViewProps> = ({ commits }) => 
                 key={node.commit.hash}
                 onClick={() => selectCommit(node.commit.hash)}
                 style={{ height: ROW_HEIGHT }}
-                className="group relative flex items-center gap-3 px-3 cursor-pointer hover:bg-vscode-hover transition-colors duration-100"
+                className={`group relative flex items-center gap-3 px-3 cursor-pointer hover:bg-vscode-hover transition-colors duration-100${starredClass(starred.includes(node.commit.hash))}`}
               >
                 <span className="flex-1 min-w-0 flex items-center gap-1.5 text-xs">
                   <span className="truncate font-medium text-gray-200" title={node.commit.subject}>
+                    <StarMark starred={starred.includes(node.commit.hash)} />
                     {node.commit.subject}
                   </span>
                   <RefBadges commit={node.commit} />

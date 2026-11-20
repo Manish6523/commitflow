@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { GitCommit } from '../types';
 import { useCommitStore } from '../stores/useCommitStore';
 import { timeAgo } from '../utils/fileHistory';
-import { CommitActions, CommitStats, RefBadges } from './CommitBits';
+import { CommitActions, CommitStats, RefBadges, StarMark, starredClass } from './CommitBits';
 import { TimelineRow } from './ui/TimelineRow';
 
 const groupTitle = (timestamp: number): string => {
@@ -19,6 +19,7 @@ const groupTitle = (timestamp: number): string => {
 
 export const CommitTimelineView: React.FC<{ commits: GitCommit[] }> = ({ commits }) => {
   const selectCommit = useCommitStore((state) => state.selectCommit);
+  const starred = useCommitStore((state) => state.starred);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const groups = useMemo(() => {
@@ -56,9 +57,11 @@ export const CommitTimelineView: React.FC<{ commits: GitCommit[] }> = ({ commits
                   isLast={index === group.commits.length - 1}
                   dotClass={commit.isMerge ? 'bg-purple-500' : 'bg-blue-500'}
                   onClick={() => selectCommit(commit.hash)}
+                  className={starredClass(starred.includes(commit.hash))}
                   title={
                     <span className="flex items-center gap-1.5">
                       <span className="truncate" title={commit.subject}>
+                        <StarMark starred={starred.includes(commit.hash)} />
                         {commit.subject}
                       </span>
                       <RefBadges commit={commit} />

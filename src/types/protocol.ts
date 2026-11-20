@@ -26,6 +26,8 @@ export interface CommitFilterOptions {
   isMerge?: boolean;
   minFilesChanged?: number;
   filePath?: string;
+  /** Only starred commits. */
+  starred?: boolean;
 }
 
 export type CommitSortField = 'date-desc' | 'date-asc' | 'files-desc' | 'additions-desc' | 'deletions-desc' | 'author-asc' | 'message-asc';
@@ -58,6 +60,7 @@ export interface ScmState {
   status: WorkingTreeStatus | null;
   stashes: StashEntry[];
   commits: GitCommit[];
+  starred: string[];
 }
 
 export type ScmFileGroup = 'conflicts' | 'staged' | 'changes';
@@ -87,6 +90,11 @@ export type WebviewToExtensionAction =
   | { type: 'GET_COMMITS'; page: number; pageSize: number; filters?: CommitFilterOptions; sort?: CommitSortField; branch?: string; seq?: number }
   | { type: 'SEARCH_COMMITS'; query: string; page: number; pageSize: number; filters?: CommitFilterOptions; seq?: number }
   | { type: 'GET_COMMIT_DETAILS'; hash: string }
+  | { type: 'GET_ADJACENT_COMMITS'; hash: string }
+  | { type: 'GET_STARRED' }
+  | { type: 'TOGGLE_STAR'; hash: string }
+  /** The dashboard opened (or closed, with null) a commit's page. */
+  | { type: 'COMMIT_OPENED'; hash: string | null }
   | { type: 'GET_COMMIT_DIFF'; hash: string; filePath?: string }
   | { type: 'COMPARE_COMMITS'; baseHash: string; targetHash: string }
   | { type: 'GET_BRANCHES_TAGS' }
@@ -114,6 +122,8 @@ export type WebviewToExtensionAction =
   | { type: 'SCM_OPEN'; file: WorkingFileChange; group: ScmFileGroup; mode: 'diff' | 'file' }
   | { type: 'SCM_GENERATE_MESSAGE' }
   | { type: 'SCM_FILE_HISTORY'; path: string }
+  | { type: 'SCM_COMMIT_FILES'; hash: string }
+  | { type: 'SCM_OPEN_COMMIT_FILE'; hash: string; parent: string | null; file: WorkingFileChange }
   | { type: 'OPEN_DASHBOARD'; hash?: string };
 
 export type WebviewMessage = WebviewToExtensionAction & { id?: string };
@@ -123,6 +133,10 @@ export type ExtensionToWebviewAction =
   | { type: 'COMMITS_LOADED'; commits: GitCommit[]; totalCount: number; page: number; hasMore: boolean; activeBranch?: string; seq?: number }
   | { type: 'SEARCH_RESULTS'; commits: GitCommit[]; totalCount: number; page: number; hasMore: boolean; seq?: number }
   | { type: 'COMMIT_DETAILS_LOADED'; details: CommitDetails }
+  | { type: 'ADJACENT_COMMITS'; hash: string; older: string | null; newer: string | null }
+  | { type: 'STARRED_LOADED'; hashes: string[] }
+  | { type: 'SCM_OPEN_COMMIT'; hash: string | null }
+  | { type: 'SCM_COMMIT_FILES_LOADED'; hash: string; files: WorkingFileChange[] }
   | { type: 'DIFF_LOADED'; hash: string; diff: string; filePath?: string }
   | { type: 'COMPARE_RESULT_LOADED'; result: CommitComparisonResult }
   | { type: 'BRANCHES_TAGS_LOADED'; branches: Branch[]; tags: Tag[] }

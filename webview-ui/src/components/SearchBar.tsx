@@ -130,10 +130,11 @@ export const SearchBar: React.FC = () => {
     (filters.until ? 1 : 0) +
     (filters.authors?.length || 0) +
     (filters.isMerge !== undefined ? 1 : 0) +
+    (filters.starred ? 1 : 0) +
     (filters.filePath ? 1 : 0);
 
   const hasChips =
-    Boolean(filters.since || filters.until || filters.filePath || filters.authors?.length) ||
+    Boolean(filters.since || filters.until || filters.filePath || filters.authors?.length || filters.starred) ||
     filters.isMerge !== undefined;
 
   const closeSaveDialog = () => {
@@ -249,10 +250,15 @@ export const SearchBar: React.FC = () => {
         <label className={inlineSelect}>
           <GitMerge className="w-3.5 h-3.5 text-gray-400" />
           <select
-            value={filters.isMerge === true ? 'merges' : filters.isMerge === false ? 'no-merges' : 'all'}
+            value={
+              filters.starred ? 'starred' : filters.isMerge === true ? 'merges' : filters.isMerge === false ? 'no-merges' : 'all'
+            }
             onChange={(e) => {
               const val = e.target.value;
-              setFilters({ isMerge: val === 'merges' ? true : val === 'no-merges' ? false : undefined });
+              setFilters({
+                isMerge: val === 'merges' ? true : val === 'no-merges' ? false : undefined,
+                starred: val === 'starred' ? true : undefined,
+              });
             }}
             aria-label="Merge commits"
             className="bg-transparent text-xs focus:outline-none cursor-pointer"
@@ -260,6 +266,7 @@ export const SearchBar: React.FC = () => {
             <option value="all">All Commits</option>
             <option value="merges">Merges Only</option>
             <option value="no-merges">Non-Merges</option>
+            <option value="starred">★ Starred</option>
           </select>
         </label>
 
@@ -333,6 +340,7 @@ export const SearchBar: React.FC = () => {
           {filters.filePath && (
             <FilterChip label={filters.filePath} onRemove={() => setFilters({ filePath: undefined })} />
           )}
+          {filters.starred && <FilterChip label="★ Starred" onRemove={() => setFilters({ starred: undefined })} />}
         </div>
       )}
 

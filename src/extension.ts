@@ -97,6 +97,9 @@ export function activate(context: vscode.ExtensionContext) {
         context?.hash ? vscode.commands.executeCommand(target, context.hash) : undefined
       )
     ),
+    vscode.commands.registerCommand('commitflow.internal.commitOpened', (hash: string | null) =>
+      sidebarProvider.setOpenCommit(hash ?? null)
+    ),
     vscode.commands.registerCommand('commitflow.graph.copyHash', async (context?: { hash?: string }) => {
       if (context?.hash) await vscode.env.clipboard.writeText(context.hash);
     }),

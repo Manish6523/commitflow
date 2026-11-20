@@ -2,19 +2,21 @@ import React from 'react';
 import { GitCommit } from '../types';
 import { useCommitStore } from '../stores/useCommitStore';
 import { timeAgo } from '../utils/fileHistory';
-import { CommitActions, CommitStats, RefBadges } from './CommitBits';
+import { CommitActions, CommitStats, RefBadges, StarMark, starredClass, useStarred } from './CommitBits';
 
 export const CommitCard: React.FC<{ commit: GitCommit }> = ({ commit }) => {
   const selectCommit = useCommitStore((state) => state.selectCommit);
+  const starred = useStarred(commit.hash);
   const hasRefs =
     commit.isMerge || commit.signatureStatus === 'G' || commit.branches.length + commit.tags.length > 0;
 
   return (
     <div
       onClick={() => selectCommit(commit.hash)}
-      className="group relative flex flex-col gap-1 min-w-0 px-3 py-2.5 border-b border-r border-vscode-border cursor-pointer hover:bg-vscode-hover transition-colors duration-100"
+      className={`group relative flex flex-col gap-1 min-w-0 px-3 py-2.5 border-b border-r border-vscode-border cursor-pointer hover:bg-vscode-hover transition-colors duration-100${starredClass(starred)}`}
     >
       <div className="text-xs font-medium text-gray-100 line-clamp-2 leading-snug" title={commit.subject}>
+        <StarMark starred={starred} />
         {commit.subject}
       </div>
       {commit.body && <div className="text-[11px] text-gray-400 truncate">{commit.body}</div>}
