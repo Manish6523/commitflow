@@ -1,132 +1,186 @@
-# CommitFlow — Visual Git Commit Explorer & Repository Management
+<p align="center">
+  <img src="media/icon.png" width="112" height="112" alt="CommitFlow logo" />
+</p>
 
-> **"Your entire Git history. Organized, searchable, visual, and actionable."**
+<h1 align="center">CommitFlow</h1>
 
-**CommitFlow** transforms the traditional Git commit history into a modern, interactive, card-based workspace embedded natively inside Visual Studio Code.
+<p align="center">
+  <b>See your whole Git history at a glance, and do your everyday Git work without leaving VS Code.</b><br/>
+  A Source Control sidebar with a commit graph, a visual history dashboard, side-by-side diffs,<br/>
+  file history, a branch and commit comparer with a conflict check, and optional AI.
+</p>
 
-Explore your entire repository history, search commits with GitHub-style operators, inspect file diffs, compare arbitrary revisions, visualize DAG branch swimlanes, understand team velocity, and perform common Git operations without switching between the terminal and external GUI tools.
+<p align="center">
+  <a href="https://github.com/Manish6523/commitflow/releases"><img src="https://img.shields.io/github/v/release/Manish6523/commitflow?label=release&color=2563eb" alt="Latest release" /></a>
+  <a href="https://github.com/Manish6523/commitflow/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-16a34a" alt="MIT license" /></a>
+  <img src="https://img.shields.io/badge/VS%20Code-1.85%2B-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code 1.85 or newer" />
+</p>
 
----
-
-## 🌟 Key Features
-
-### 1. Card-First Commit Discovery & View Modes
-- **Grid View (Card-First)**: Modern, responsive commit cards featuring author avatars with initials, relative and exact timestamps, branch/tag badges, commit subject/body snippets, lines added (`+`) and deleted (`-`), verified cryptographic signatures, and merge indicators.
-- **List View**: Dense tabular view optimized for scanning extensive histories with sortable columns and rapid SHA/message copying.
-- **Timeline View**: Chronologically grouped commits (*Today*, *Yesterday*, *This Month*, *Previous Months*) with expandable sections and visual vertical connectors.
-- **Graph View**: Interactive SVG Git DAG visualization with real parent-child relationship swimlanes, merge nodes, branch heads, and zoom/pan controls.
-
-### 2. Powerful Search & Operator Engine
-Plain words must all appear, in any order, across messages, authors, emails, branch and tag names, and hashes. Put a phrase in quotes to keep it together. Everything runs locally, and these operators narrow the results:
-- `author:<name>` / `committer:<name>` — Filter by name or email (e.g., `author:manish`)
-- `message:<query>` — Search commit subject and body (e.g., `message:authentication`)
-- `after:<YYYY-MM-DD>` / `since:` — Commits on or after a date
-- `before:<YYYY-MM-DD>` / `until:` — Commits on or before a date
-- `file:<path>` — Part of a path, a folder, or a glob like `*.tsx`
-- `branch:<name>` — Commits on a branch
-- `tag:<name>` — Commits with a matching tag
-- `code:<text>` — Commits that added or removed this text
-- `is:merge` / `is:non-merge` — Filter merge commits
-- `hash:<sha>` — Find a commit by full or short hash, on any branch
-
-### 3. Source Control Sidebar
-The CommitFlow icon in the Activity Bar opens a Source Control panel that works like VS Code's own, plus a commit graph.
-- **Commit**: write a message, or click ✨ to generate one with your AI settings. The Commit button also offers Commit (Amend), Commit & Push, Commit & Sync and Undo Last Commit. `Ctrl+Enter` commits.
-- **Changes**: Merge Changes, Staged Changes and Changes, as a list or a folder tree. Click a file to see its diff, hover for open, discard and stage buttons, or right-click for more, including File History. Ctrl/Shift-click selects several files.
-- **Sync**: pull, push, fetch, sync or publish a branch, and switch branches by clicking the branch name. More actions are in the view's `⋯` menu.
-- **Stashes and graph**: apply, pop or drop stashes, and browse recent commits, including incoming ones. Click a commit to open it in the dashboard.
-
-### 4. Rich Commit Inspector & Diff Viewer
-- **Full-Page Diff Editor**: Monaco-powered split and inline diffs with syntax highlighting, word-level changes, collapsible unchanged regions and next/previous change navigation (F7 / Shift+F7).
-- **File History**: See every commit that changed a file, following renames. Click a commit to see its change, or mark any two versions as A and B to compare them, including your working copy.
-- **Changed Files Breakdown**: View all modified files with status codes (`A` Added, `M` Modified, `D` Deleted, `R` Renamed) and additions/deletions counts.
-- **Native VS Code Diff Integration**: Jump directly into VS Code's native diff editor with one click.
-- **Parent Navigation**: Click parent hashes to traverse merge commits and branching histories.
-
-### 5. Commit Comparison Engine
-- Compare arbitrary commits, branches, tags, or `HEAD`.
-- Inspect commits ahead and behind.
-- Cumulative file-level diffs and additions/deletions totals.
-
-### 6. Branch & Tag Explorer
-- **Local & Remote Branches**: Inspect tracking branches, ahead/behind counters relative to upstream, and last commit dates.
-- **Branch Operations**: Checkout, create branch from commit, and delete local branches safely.
-- **Tag Management**: Inspect lightweight and annotated tags with tagger dates and messages.
-
-### 7. Contributor & Repository Analytics
-- **52-Week GitHub-style Activity Heatmap**: Interactive calendar tiles with commit density levels (0–4) and date-click filtering.
-- **Commit Velocity Charts**: Daily and weekly commit trends powered by Recharts.
-- **Contributor Leaderboard**: Rankings by total commits, first/last activity dates, and line churn.
-- **Frequently Modified Files**: Identifies hotspots and high-churn code paths across history.
-
-### 8. Optional AI with Your Own API Key
-Open the gear icon in the dashboard, or run **CommitFlow: Configure AI**, then pick a provider and paste your key. OpenAI, Anthropic, Google Gemini and any OpenAI-compatible server (including local ones like Ollama) are supported.
-- **AI Insights**: A real review of a commit's purpose, key changes and risks.
-- **Smart Search**: Describe what you're looking for, and it becomes a search query.
-- **Works without a key**: CommitFlow falls back to basic built-in analysis, with nothing sent anywhere.
-- **Privacy**: Keys are stored in VS Code's encrypted `SecretStorage`. When AI is on, commit messages, file names and diffs are sent to the provider you chose, only when you open AI Insights or use Smart Search. Files like `.env` and private keys are left out of diffs.
+<p align="center">
+  <img src="media/screenshots/dashboard-cards.png" alt="The CommitFlow dashboard showing commits as cards, with the Source Control sidebar and commit graph on the left" />
+</p>
 
 ---
 
-## 🚀 Quick Start
+## Why CommitFlow
 
-1. Open any workspace containing a Git repository in VS Code.
-2. Click the **CommitFlow** icon in the Activity Bar or press `Ctrl+Shift+P` (`Cmd+Shift+P` on macOS) and run:
-   ```
-   CommitFlow: Open Commit Dashboard
-   ```
-3. Use the top navigation bar to toggle between **Cards**, **List**, **Timeline**, **Graph**, **Branches**, **Compare**, and **Analytics**.
-
----
-
-## ⌨️ Extension Commands
-
-| Command | Title | Description |
-|---------|-------|-------------|
-| `commitflow.openDashboard` | Open Commit Dashboard | Opens the main interactive CommitFlow dashboard |
-| `commitflow.refresh` | Refresh Repository | Refreshes repository metadata, commits, and branches |
-| `commitflow.search` | Search Commits | Focuses the search input in CommitFlow |
-| `commitflow.clearFilters` | Clear All Filters | Resets all active date, author, and branch filters |
-| `commitflow.openFileHistory` | Open File History | Opens commit history for the current editor file or an Explorer selection |
-| `commitflow.compareCommits` | Compare Commits | Opens the revision comparison workspace |
-| `commitflow.viewBranches` | View Branches & Tags | Opens the branch and tag explorer |
-| `commitflow.viewAnalytics` | View Analytics | Displays repository velocity and heatmaps |
-| `commitflow.checkoutCommit` | Checkout Commit | Prompts and checks out a commit or branch |
-| `commitflow.cherryPick` | Cherry-Pick Commit | Cherry-picks a commit into current HEAD |
-| `commitflow.revertCommit` | Revert Commit | Safely reverts a commit |
-| `commitflow.createBranch` | Create Branch from Commit | Creates a new branch from a selected revision |
-| `commitflow.createTag` | Create Tag from Commit | Creates lightweight or annotated tags |
-| `commitflow.openSettings` | Open Settings | Configures CommitFlow options |
+| | |
+| :-- | :-- |
+| 🧭 **Source Control, upgraded** | Stage, commit, amend, push, pull, sync and stash from a sidebar that looks and works like VS Code's own, with a commit graph underneath. |
+| 🗂️ **History you can scan** | Browse commits as cards, a list, a timeline or a branch graph. Click any commit for its full change. |
+| 🔍 **Search that understands Git** | Find commits by words, author, date, file, branch, tag or the code they changed. |
+| 🆚 **Compare anything** | Pick two commits, branches or tags, see every change between them, and check for merge conflicts before you merge. |
+| 📜 **File history** | Follow one file through every commit, across renames, and compare any two versions. |
+| ⭐ **Stars for review** | Star the commits you've checked. They stay gold in every view, and one filter lists only them. |
+| ✨ **Optional AI** | Write commit messages, review commits and search in plain English with your own OpenAI, Anthropic, Gemini or self-hosted model. Off until you turn it on. |
 
 ---
 
-## ⚙️ Configuration Settings
+## Features
 
-Customize CommitFlow in VS Code Settings (`Ctrl+,`):
+### Source Control sidebar
 
-```json
-{
-  "commitflow.pageSize": 30,
-  "commitflow.defaultViewMode": "grid",
-  "commitflow.dateFormat": "relative",
-  "commitflow.enableAI": false,
-  "commitflow.aiProvider": "openai",
-  "commitflow.aiModel": "",
-  "commitflow.aiBaseUrl": ""
-}
-```
+<table>
+  <tr>
+    <td width="360" valign="top"><img src="media/screenshots/sidebar.png" alt="The CommitFlow sidebar with staged and unstaged files, starred commits and a commit expanded to show its files" /></td>
+    <td valign="top">
+
+Click the **CommitFlow** icon in the Activity Bar.
+
+- **Commit** with `Ctrl+Enter`. The button's menu offers **Commit (Amend)**, **Commit & Push**, **Commit & Sync** and **Undo Last Commit**.
+- Click ✨ to **generate a commit message** from your changes, with AI or a built-in fallback.
+- **Merge Changes**, **Staged Changes** and **Changes**, as a list or a folder tree. Hover a file to open, discard or stage it. Right-click for more, including **Open File History**.
+- Select several files with `Ctrl` or `Shift` and act on all of them.
+- **Sync**, **Publish Branch** and branch switching from the branch name at the top.
+- **Stashes**: apply, pop or drop.
+- **Graph** of your branch and incoming commits. Click a commit to list its files, and click a file to see its change. Older commits load as you scroll.
+- The change count shows on the icon, and everything refreshes on its own.
+
+  </td>
+  </tr>
+</table>
+
+### Commit details and diffs
+
+<p align="center"><img src="media/screenshots/commit-diff.png" alt="A commit's page with its changed files and a side-by-side diff" /></p>
+
+- A full-page, side-by-side or inline **diff** with syntax highlighting and word-level changes.
+- Toolbar buttons to **wrap long lines**, **expand or collapse unchanged lines**, ignore whitespace, and jump between changes (`F7` / `Shift+F7`).
+- **Previous** and **Next** step to the commit made just before or after, along your branch.
+- **AI Insights** sums up a commit, rates its risk and lists its key changes.
+- One click opens the change in VS Code's own diff editor.
+
+### Compare branches, tags and commits
+
+<p align="center"><img src="media/screenshots/compare-picker.png" alt="The Compare page with a picker listing starred commits and matching commits" /></p>
+
+- **Base** and **Target** open a list of starred commits, every branch and tag, and recent commits. Type to filter your whole history, or enter any ID, branch, tag or `HEAD~1`.
+- **⇄** swaps the two.
+- **Only Target's own changes** compares from where the branches split, so you see exactly what a merge would bring in.
+- **Check for conflicts** runs a trial merge without touching your files and lists any file that would conflict. Click one to see the clashing lines.
+
+<p align="center"><img src="media/screenshots/compare-conflicts.png" alt="A conflict check reporting that master merges into v0.4.0 cleanly" /></p>
+
+### File history
+
+<p align="center"><img src="media/screenshots/file-history.png" alt="Every commit that changed a file, next to the change in one of them" /></p>
+
+Open any file's history from the editor title bar, the Explorer, the sidebar or the dashboard. CommitFlow follows the file across renames. Click a commit to see what it changed, or mark any two versions as **A** and **B** to compare them, including your working copy.
+
+### Commit graph
+
+<p align="center"><img src="media/screenshots/graph.png" alt="The commit graph with branch lanes, merges, tags and starred commits" /></p>
+
+Branch lanes, merges, branch and tag labels, and stars, with zoom. Hover any commit to copy its ID, compare it with `HEAD`, check it out, cherry-pick or revert it.
+
+### Analytics
+
+<p align="center"><img src="media/screenshots/analytics.png" alt="Activity heatmap, daily commits chart, top contributors and most changed files" /></p>
+
+A year-long activity heatmap, daily commits, top contributors and the files that change most. Click a day, a person or a file to filter the history.
+
+### Search
+
+Type words to find commits containing all of them, in any order, across messages, authors, branches, tags and IDs. Narrow it down with:
+
+| Operator | Finds |
+| :-- | :-- |
+| `author:manish` / `committer:` | Commits by a name or email |
+| `after:2026-11-01` / `before:` | Commits on or after, or before, a date |
+| `file:src/git` | Commits that touched a path, folder or glob such as `*.tsx` |
+| `code:resolveCommit` | Commits that added or removed this text |
+| `branch:main` / `tag:v1.0` | Commits on a branch, or with a tag |
+| `is:merge` / `is:non-merge` | Merge commits, or everything else |
+| `hash:fa51ddb` | One commit, by full or short ID |
+
+With AI on, **Smart Search** turns "what Manish changed in the login page last week" into a query for you.
+
+### Stars
+
+Click ☆ on any commit to mark it as checked. Starred commits get a gold edge and a ★ everywhere, and **★ Starred** in the commit filter lists only them. Stars are saved on your computer for each repository and never change your Git history.
 
 ---
 
-## 🔒 Security & Data Privacy
+## Getting started
 
-- **Safe Process Execution**: All Git commands execute via bounded argument arrays (`execFile`) rather than shell interpolation, eliminating command injection vulnerabilities.
-- **Strict Content Security Policy (CSP)**: The Webview enforces strict nonces, restricted local resource roots, and prevents untrusted script execution.
-- **Local-First Architecture**: Your Git repository remains the single source of truth. No accounts or telemetry services required, and nothing leaves your machine unless you turn on AI with your own key.
+1. Install **CommitFlow**. Or download the `.vsix` from the [latest release](https://github.com/Manish6523/commitflow/releases/latest) and run **Extensions: Install from VSIX…**.
+2. Open a folder that contains a Git repository.
+3. Click the **CommitFlow** icon in the Activity Bar for Source Control, or run **CommitFlow: Open Commit Dashboard** from the Command Palette (`Ctrl+Shift+P`).
+
+### AI, if you want it
+
+AI features are **off by default**, and CommitFlow works fully without them.
+
+1. Run **CommitFlow: Configure AI**, or click the ⚙ in the dashboard.
+2. Choose **OpenAI**, **Anthropic**, **Google Gemini** or **Custom server** (any OpenAI-compatible server, such as Ollama, LM Studio or FreeLLMAPI).
+3. Paste your API key and click **Test connection**.
+
+Your key is stored in VS Code's encrypted secret storage. When AI is on, the commit messages, file names and diffs you ask about are sent to the provider you chose. Files such as `.env` and private keys are always left out.
 
 ---
 
-## 📄 License
+## Commands
 
-MIT License. Built for modern software development teams.
+| Command | What it does |
+| :-- | :-- |
+| **CommitFlow: Open Commit Dashboard** | Opens the history dashboard |
+| **CommitFlow: Refresh Repository** | Reloads the sidebar and the dashboard |
+| **CommitFlow: Search Commits** | Jumps to the search box |
+| **CommitFlow: Open File History** | Shows the history of the current file |
+| **CommitFlow: Compare Commits** | Opens the Compare page |
+| **CommitFlow: Open Specific Commit** | Opens one commit by ID |
+| **CommitFlow: View Branches & Tags** / **View Analytics & Insights** | Opens those pages |
+| **CommitFlow: Checkout / Cherry-Pick / Revert Commit** | Runs that action on a commit |
+| **CommitFlow: Create Branch / Create Tag from Commit** | Starts a branch or tag at a commit |
+| **CommitFlow: Configure AI** | Sets up your AI provider and key |
+| **CommitFlow: Pull / Push / Sync / Fetch / Stash / Switch Branch…** | The sidebar's `⋯` menu, also in the Command Palette |
 
+## Settings
+
+| Setting | Default | Description |
+| :-- | :-- | :-- |
+| `commitflow.pageSize` | `30` | Commits per page in the dashboard |
+| `commitflow.defaultViewMode` | `grid` | The view the dashboard opens with |
+| `commitflow.dateFormat` | `relative` | How commit times are shown |
+| `commitflow.enableAI` | `false` | Use your AI provider for AI features |
+| `commitflow.aiProvider` | `openai` | `openai`, `anthropic`, `gemini` or `custom` |
+| `commitflow.aiModel` | | The model to use; picked for you when left empty |
+| `commitflow.aiBaseUrl` | | Your server's address, for the `custom` provider |
+
+## Requirements
+
+- VS Code 1.85 or newer.
+- Git on your `PATH`. **Check for conflicts** needs Git 2.38 or newer; everything else works with older versions.
+
+## Privacy
+
+CommitFlow reads your repository with your own `git` and keeps everything on your computer. It collects no telemetry. Nothing leaves your machine unless you turn on AI, and then only what's described above goes to the provider you chose.
+
+---
+
+<p align="center">
+  <a href="https://github.com/Manish6523/commitflow/blob/master/CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/Manish6523/commitflow/issues">Report an issue</a> ·
+  <a href="https://github.com/Manish6523/commitflow">Source on GitHub</a> ·
+  MIT License
+</p>

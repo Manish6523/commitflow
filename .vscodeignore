@@ -3,7 +3,8 @@
 src/**
 webview-ui/**
 !dist/**
-!media/**
+# README images load from GitHub, so the package needn't carry them.
+media/screenshots/**
 node_modules/**
 esbuild.js
 tsconfig*.json
