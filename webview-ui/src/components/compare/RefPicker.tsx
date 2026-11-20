@@ -41,6 +41,11 @@ export const RefPicker: React.FC<{
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<CompareSuggestions | null>(null);
   const [loading, setLoading] = useState(false);
+  // Commits come 50 at a time; scrolling near the end asks for the next page.
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Refs, not state, so scroll events arriving together can't fetch the same page twice.
+  const pageRef = useRef(1);
+  const fetchingMore = useRef(false);
   const [active, setActive] = useState(0);
   // Enter picks from the list once someone types or moves through it; otherwise it compares.
   const [browsing, setBrowsing] = useState(false);
@@ -58,9 +63,14 @@ export const RefPicker: React.FC<{
         .then((res) => {
           if (res.query !== latest.current) return;
           setSuggestions(res.suggestions);
+          pageRef.current = 1;
           setActive(0);
         })
-        .catch(() => latest.current === query && setSuggestions({ starred: [], refs: [], commits: [] }))
+        .catch(
+          () =>
+            latest.current === query &&
+            setSuggestions({ starred: [], refs: [], commits: [], commitsTotal: 0, commitsHasMore: false })
+        )
         .finally(() => latest.current === query && setLoading(false));
     }, 150);
     return () => clearTimeout(timer);
@@ -80,6 +90,40 @@ export const RefPicker: React.FC<{
 
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [active]);
+
+  const loadMore = () => {
+    if (!suggestions?.commitsHasMore || fetchingMore.current) return;
+    const forQuery = query;
+    const next = pageRef.current + 1;
+    fetchingMore.current = true;
+    setLoadingMore(true);
+    vscode
+      .request<{ query: string; suggestions: CompareSuggestions }>({ type: 'COMPARE_SUGGEST', query: forQuery, page: next })
+      .then((res) => {
+        if (res.query !== latest.current) return;
+        setSuggestions((prev) => {
+          if (!prev) return prev;
+          const seen = new Set(prev.commits.map((c) => c.hash));
+          return {
+                ...prev,
+                commits: [...prev.commits, ...res.suggestions.commits.filter((c) => !seen.has(c.hash))],
+                commitsHasMore: res.suggestions.commitsHasMore,
+                commitsTotal: res.suggestions.commitsTotal,
+          };
+        });
+        pageRef.current = next;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        fetchingMore.current = false;
+        setLoadingMore(false);
+      });
+  };
+
+  // Reaching the last few items with the keyboard also loads more.
+  useEffect(() => {
+    if (open && items.length && active >= items.length - 3) loadMore();
   }, [active]);
 
   const pick = (item: Item) => {
@@ -157,6 +201,10 @@ export const RefPicker: React.FC<{
         <div
           ref={listRef}
           role="listbox"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) loadMore();
+          }}
           // Keep focus in the box while clicking the list.
           onMouseDown={(e) => e.preventDefault()}
           className="absolute z-50 left-12 right-0 top-8 max-h-80 overflow-y-auto rounded-md border border-vscode-border shadow-xl py-1"
@@ -177,6 +225,7 @@ export const RefPicker: React.FC<{
                 {first && (
                   <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                     {GROUP_TITLES[group]}
+                    {group === 'refs' && suggestions ? ` (${suggestions.refs.length})` : ''}
                   </div>
                 )}
                 <div
@@ -190,9 +239,11 @@ export const RefPicker: React.FC<{
                   }`}
                 >
                   {item.kind === 'ref' ? (
-                    <>
+                    <span className="flex-1 min-w-0 flex flex-col py-0.5">
+                      <span className="flex items-center gap-2 min-w-0">
                       <span
-                        className={`inline-flex items-center gap-1 px-1.5 rounded-full font-mono text-[11px] truncate ${
+                        title={item.ref.name}
+                        className={`inline-flex items-center gap-1 px-1.5 rounded-full font-mono text-[11px] min-w-0 truncate ${
                           item.ref.kind === 'tag' ? 'bg-amber-500/15 text-amber-500' : 'bg-blue-500/15 text-blue-400'
                         }`}
                       >
@@ -205,12 +256,21 @@ export const RefPicker: React.FC<{
                         )}
                         <Highlight text={item.ref.name} query={query} />
                       </span>
+                      {item.ref.current && (
+                        <span className="px-1 rounded text-[10px] bg-emerald-500/15 text-emerald-500 shrink-0">current</span>
+                      )}
                       <span className="flex-1" />
-                      <span className="text-[11px] opacity-70 shrink-0">
-                        {item.ref.kind === 'tag' ? 'tag' : item.ref.kind === 'remote' ? 'remote branch' : 'branch'}
-                        {item.ref.date && !Number.isNaN(Date.parse(item.ref.date)) ? ` · ${timeAgo(Date.parse(item.ref.date))}` : ''}
+                      <span
+                        className="text-[11px] opacity-70 shrink-0"
+                        title={item.ref.kind === 'tag' ? 'Tag' : item.ref.kind === 'remote' ? 'Remote branch' : 'Branch'}
+                      >
+                        {item.ref.date && !Number.isNaN(Date.parse(item.ref.date)) ? timeAgo(Date.parse(item.ref.date)) : ''}
                       </span>
-                    </>
+                      </span>
+                      <span className="text-[11px] opacity-70 truncate pl-1 mt-0.5">
+                        {item.ref.author} · <span className="font-mono">{item.ref.hash}</span> · <Highlight text={item.ref.subject} query={query} />
+                      </span>
+                    </span>
                   ) : (
                     <>
                       {item.group === 'starred' && <Star className="w-3 h-3 shrink-0 fill-amber-400 text-amber-400" />}
@@ -229,8 +289,16 @@ export const RefPicker: React.FC<{
               </React.Fragment>
             );
           })}
-          <div className="mt-1 px-3 pt-1.5 pb-0.5 border-t border-vscode-border text-[10px] text-gray-500">
-            ↑ ↓ move · Enter pick · Esc close · or type an ID, branch, tag or HEAD~1
+          {loadingMore && <div className="px-3 py-1.5 text-[11px] text-gray-400">Loading more commits…</div>}
+          <div className="sticky bottom-0 mt-1 px-3 pt-1.5 pb-0.5 border-t border-vscode-border text-[10px] text-gray-500 flex gap-2" style={{ background: 'inherit' }}>
+            <span className="flex-1 min-w-0 truncate" title="↑ ↓ move · Enter pick · Esc close · or type an ID, branch, tag or HEAD~1">
+              ↑ ↓ move · Enter pick · Esc close · or type an ID, branch, tag or HEAD~1
+            </span>
+            {suggestions && suggestions.commitsTotal > 0 && (
+              <span className="shrink-0">
+                {suggestions.commits.length.toLocaleString()} of {suggestions.commitsTotal.toLocaleString()} commits
+              </span>
+            )}
           </div>
         </div>
       )}

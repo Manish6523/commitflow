@@ -6,6 +6,7 @@ import { SourceControlService, describeGitError, parseStatus } from '../git/Sour
 import { GitProcess, GitProcessError } from '../git/GitProcess';
 import { localCommitMessage } from '../services/AIService';
 import { CommitService } from '../git/CommitService';
+import { BranchService } from '../git/BranchService';
 import { DiffService } from '../git/DiffService';
 import { StorageService } from '../services/StorageService';
 import { SearchService } from '../services/SearchService';
@@ -500,5 +501,23 @@ describe('compare and merge check', () => {
 
     expect(await git(repo, 'rev-parse', 'HEAD')).toBe(head);
     expect(await git(repo, 'status', '--porcelain')).toBe('');
+  });
+});
+
+describe('listing branches and tags', () => {
+  it('lists every branch and tag newest first, current branch on top, tags peeled to their commit', async () => {
+    const repo = await newRepo();
+    for (let i = 1; i <= 15; i++) await git(repo, 'branch', `b${i}`);
+    write(repo, 'x.txt', 'x');
+    await git(repo, 'add', '.');
+    await git(repo, 'commit', '-q', '-m', 'feat: newest work');
+    await git(repo, 'tag', '-a', 'v1', '-m', 'release one');
+    const head = await git(repo, 'rev-parse', '--short', 'HEAD');
+
+    const refs = await BranchService.listRefs(repo);
+    expect(refs.filter((r) => r.kind === 'branch')).toHaveLength(16);
+    expect(refs[0]).toMatchObject({ name: 'main', kind: 'branch', current: true, subject: 'feat: newest work', author: 'Test User' });
+    const tag = refs.find((r) => r.name === 'v1')!;
+    expect(tag).toMatchObject({ kind: 'tag', hash: head, subject: 'feat: newest work', current: false });
   });
 });

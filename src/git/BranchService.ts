@@ -1,5 +1,5 @@
 import { GitProcess } from './GitProcess';
-import { Branch } from '../types/git';
+import { Branch, RefSummary } from '../types/git';
 
 const BRANCH_FORMAT = '%(refname)%09%(refname:short)%09%(upstream:short)%09%(objectname:short)%09%(contents:subject)%09%(committerdate:iso8601)%09%(HEAD)';
 
@@ -100,6 +100,48 @@ export class BranchService {
   /**
    * Checkout an existing branch or commit.
    */
+  /**
+   * Every branch, remote branch and tag with its latest commit, newest first,
+   * in one git call. Tags show the commit they point to.
+   */
+  public static async listRefs(repoRoot: string): Promise<RefSummary[]> {
+    const fields = [
+      '%(HEAD)',
+      '%(refname)',
+      '%(objectname:short)',
+      '%(*objectname:short)',
+      '%(subject)',
+      '%(*subject)',
+      '%(authorname)',
+      '%(*authorname)',
+      '%(creatordate:iso-strict)',
+    ];
+    const res = await GitProcess.exec(
+      ['for-each-ref', '--sort=-creatordate', `--format=${fields.join('%1f')}`, 'refs/heads/', 'refs/remotes/', 'refs/tags/'],
+      { cwd: repoRoot }
+    );
+    const refs: RefSummary[] = [];
+    for (const line of res.stdout.split('\n')) {
+      if (!line) continue;
+      const [head, refname, hash, peeledHash, subject, peeledSubject, author, peeledAuthor, date] = line.split('\x1f');
+      const kind = refname.startsWith('refs/heads/') ? 'branch' : refname.startsWith('refs/tags/') ? 'tag' : 'remote';
+      const name = refname.replace(/^refs\/(heads|tags|remotes)\//, '');
+      // A remote's default-branch pointer, like origin/HEAD, isn't a branch.
+      if (kind === 'remote' && (name.endsWith('/HEAD') || !name.includes('/'))) continue;
+      refs.push({
+        name,
+        kind,
+        hash: peeledHash || hash,
+        subject: peeledSubject || subject,
+        author: peeledAuthor || author,
+        date,
+        current: head === '*',
+      });
+    }
+    // The branch you're on comes first, as in VS Code's pickers.
+    return refs.sort((a, b) => Number(b.current) - Number(a.current));
+  }
+
   public static async checkout(repoRoot: string, target: string): Promise<void> {
     await GitProcess.exec(['checkout', target], { cwd: repoRoot });
   }

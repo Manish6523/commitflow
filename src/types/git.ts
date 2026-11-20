@@ -139,8 +139,23 @@ export interface MergeCheckResult {
 /** Something to compare, offered by the Compare page's picker. */
 export interface CompareSuggestions {
   starred: GitCommit[];
-  refs: { name: string; kind: 'branch' | 'remote' | 'tag'; hash: string; date: string }[];
+  refs: RefSummary[];
   commits: GitCommit[];
+  /** How many commits match in total, and whether more pages follow. */
+  commitsTotal: number;
+  commitsHasMore: boolean;
+}
+
+/** A branch or tag with its latest commit, for pickers. */
+export interface RefSummary {
+  name: string;
+  kind: 'branch' | 'remote' | 'tag';
+  /** Short hash of the commit it points to. */
+  hash: string;
+  subject: string;
+  author: string;
+  date: string;
+  current: boolean;
 }
 
 export interface FileHistoryCommit {

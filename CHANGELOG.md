@@ -2,6 +2,14 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
+## [0.4.3] - 2026-11-20
+
+### Fixed
+
+- The Compare picker showed only 12 branches and tags and 25 commits. It now lists every branch and tag, newest first with your current branch on top, and loads more commits as you scroll, showing how many there are.
+- Branch and tag rows in the picker now show the author, short ID and message of their latest commit, like VS Code's branch picker.
+- Opening the picker in a repository with many branches was slow, because it ran a git command per branch on every keystroke. It now reads them all in one.
+
 ## [0.4.2] - 2026-11-20
 
 ### Added

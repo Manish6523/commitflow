@@ -100,7 +100,7 @@ export type WebviewToExtensionAction =
   | { type: 'COMMIT_OPENED'; hash: string | null }
   | { type: 'GET_COMMIT_DIFF'; hash: string; filePath?: string }
   | { type: 'COMPARE_COMMITS'; baseHash: string; targetHash: string; mode?: CompareMode }
-  | { type: 'COMPARE_SUGGEST'; query: string }
+  | { type: 'COMPARE_SUGGEST'; query: string; page?: number }
   | { type: 'CHECK_MERGE'; base: string; target: string }
   | { type: 'OPEN_MERGE_CONFLICT'; tree: string; path: string }
   | { type: 'GET_BRANCHES_TAGS' }
@@ -145,7 +145,7 @@ export type ExtensionToWebviewAction =
   | { type: 'SCM_COMMIT_FILES_LOADED'; hash: string; files: WorkingFileChange[] }
   | { type: 'DIFF_LOADED'; hash: string; diff: string; filePath?: string }
   | { type: 'COMPARE_RESULT_LOADED'; result: CommitComparisonResult }
-  | { type: 'COMPARE_SUGGESTIONS'; query: string; suggestions: CompareSuggestions }
+  | { type: 'COMPARE_SUGGESTIONS'; query: string; page: number; suggestions: CompareSuggestions }
   | { type: 'MERGE_CHECKED'; result: MergeCheckResult }
   | { type: 'BRANCHES_TAGS_LOADED'; branches: Branch[]; tags: Tag[] }
   | { type: 'ANALYTICS_LOADED'; analytics: AnalyticsData }

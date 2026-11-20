@@ -15,6 +15,9 @@ import { StorageService } from '../services/StorageService';
 import { AIService } from '../services/AIService';
 import { CompareSuggestions, RepositoryInfo } from '../types/git';
 
+/** Commits per page in the Compare picker; more load as you scroll. */
+const SUGGESTION_PAGE = 50;
+
 export class MessageHandler {
   private activeRepo: RepositoryInfo | null = null;
   private repositories: RepositoryInfo[] = [];
@@ -171,8 +174,9 @@ export class MessageHandler {
 
         case 'COMPARE_SUGGEST': {
           const repo = await this.requireActiveRepo();
-          const suggestions = await this.compareSuggestions(repo.rootUri, message.query);
-          this.postMessage({ type: 'COMPARE_SUGGESTIONS', query: message.query, suggestions, requestId });
+          const page = message.page ?? 1;
+          const suggestions = await this.compareSuggestions(repo.rootUri, message.query, page);
+          this.postMessage({ type: 'COMPARE_SUGGESTIONS', query: message.query, page, suggestions, requestId });
           break;
         }
 
@@ -454,47 +458,42 @@ export class MessageHandler {
     }
   }
 
-  /** Starred commits, branches and tags, and commits matching what's typed, for the Compare picker. */
-  private async compareSuggestions(repoRoot: string, query: string): Promise<CompareSuggestions> {
+  /**
+   * Starred commits, branches and tags, and commits matching what's typed, for
+   * the Compare picker. Later pages only carry more commits.
+   */
+  private async compareSuggestions(repoRoot: string, query: string, page = 1): Promise<CompareSuggestions> {
     const q = query.trim();
-    const matches = (...texts: string[]) => !q || texts.some((t) => t.toLowerCase().includes(q.toLowerCase()));
+    const lower = q.toLowerCase();
+    const matches = (...texts: string[]) => !q || texts.some((t) => t.toLowerCase().includes(lower));
+    const commitPage = (q
+      ? SearchService.search(repoRoot, q, { page, pageSize: SUGGESTION_PAGE })
+      : CommitService.getCommits(repoRoot, { page, pageSize: SUGGESTION_PAGE })
+    ).catch(() => ({ commits: [], totalCount: 0, hasMore: false }));
+
+    if (page > 1) {
+      const list = await commitPage;
+      return { starred: [], refs: [], commits: list.commits, commitsTotal: list.totalCount, commitsHasMore: list.hasMore };
+    }
+
     // A starred commit can vanish, for example after a rebase, so look each one up alone.
     const starredLookups = this.storageService
       .getStarred(repoRoot)
       .map((hash) => CommitService.getCommitsByHashes(repoRoot, [hash]).catch(() => []));
-
-    const [starred, branches, tags, list] = await Promise.all([
+    const [starred, refs, list] = await Promise.all([
       Promise.all(starredLookups).then((found) => found.flat()),
-      BranchService.getBranches(repoRoot).catch(() => []),
-      TagService.getTags(repoRoot).catch(() => []),
-      (q
-        ? SearchService.search(repoRoot, q, { page: 1, pageSize: 25 })
-        : CommitService.getCommits(repoRoot, { page: 1, pageSize: 25 })
-      ).catch(() => ({ commits: [] })),
+      BranchService.listRefs(repoRoot).catch(() => []),
+      commitPage,
     ]);
-
-    const refs: CompareSuggestions['refs'] = [
-      ...branches
-        // A remote's default-branch pointer shows up as just "origin"; it isn't a branch.
-        .filter((b) => !b.name.endsWith('/HEAD') && !(b.isRemote && !b.name.includes('/')) && matches(b.name))
-        .map((b) => ({
-          name: b.name,
-          kind: b.isRemote ? ('remote' as const) : ('branch' as const),
-          hash: b.lastCommitHash,
-          date: b.lastCommitDate,
-        })),
-      ...tags
-        .filter((t) => matches(t.name))
-        .map((t) => ({ name: t.name, kind: 'tag' as const, hash: t.targetHash, date: t.taggerDate ?? '' })),
-    ].slice(0, 12);
 
     return {
       starred: starred
         .filter((c) => matches(c.subject, c.hash, c.author.name, ...c.branches, ...c.tags))
-        .sort((a, b) => b.author.timestamp - a.author.timestamp)
-        .slice(0, 10),
-      refs,
+        .sort((a, b) => b.author.timestamp - a.author.timestamp),
+      refs: refs.filter((r) => matches(r.name, r.subject, r.author, r.hash)),
       commits: list.commits,
+      commitsTotal: list.totalCount,
+      commitsHasMore: list.hasMore,
     };
   }
 
