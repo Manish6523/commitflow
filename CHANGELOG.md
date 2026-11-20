@@ -2,6 +2,17 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
+## [0.5.0] - 2026-11-20
+
+### Changed
+
+- The extension's ID is now `commitflow.commitflow-vscode`, ready for the VS Code Marketplace. VS Code treats it as a new extension, so uninstall the old **CommitFlow** (`commitflow.commitflow`) and add your AI key and stars again once. Your `commitflow.*` settings carry over.
+- A new README with screenshots of every part of CommitFlow.
+
+### Fixed
+
+- The sidebar graph stopped at 50 commits. Older commits now load as you scroll to the end, with a **Load more commits** row.
+
 ## [0.4.4] - 2026-11-20
 
 ### Added

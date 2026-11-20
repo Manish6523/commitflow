@@ -1,13 +1,21 @@
 {
-  "name": "commitflow",
+  "name": "commitflow-vscode",
   "displayName": "CommitFlow",
-  "description": "Visual Git Commit Explorer, Repository Manager, Diff Inspector & Analytics for VS Code",
-  "version": "0.4.4",
+  "description": "Visual Git commit history, interactive graph, side-by-side diff viewer, file history, branch manager and commit explorer.",
+  "version": "0.5.0",
   "publisher": "commitflow",
   "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0f172a",
+    "theme": "dark"
+  },
+  "homepage": "https://github.com/Manish6523/commitflow#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/Manish6523/commitflow"
+  },
+  "bugs": {
+    "url": "https://github.com/Manish6523/commitflow/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -19,13 +27,24 @@
   ],
   "keywords": [
     "git",
-    "commit",
-    "history",
+    "git graph",
+    "git history",
     "diff",
-    "graph",
+    "commit",
+    "git log",
+    "source control",
+    "scm",
+    "git diff",
+    "diff viewer",
+    "file history",
+    "branch",
+    "visual git",
+    "commit graph",
+    "git tools",
+    "stash",
     "analytics",
-    "repository",
-    "branch"
+    "compare",
+    "repository"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
