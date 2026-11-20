@@ -216,6 +216,11 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
           await this.controller.toggleStar(message.hash);
           break;
 
+        case 'SCM_GRAPH_MORE':
+          this.controller.showMoreGraph();
+          await this.refresh();
+          break;
+
         case 'SCM_OPEN_COMMIT_FILE':
           await this.controller.openCommitFile(message.hash, message.parent, message.file);
           break;

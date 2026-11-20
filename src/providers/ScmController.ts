@@ -11,12 +11,15 @@ import { RevisionContentProvider } from './RevisionContentProvider';
 import { RepositoryInfo, WorkingFileChange } from '../types/git';
 import { ScmAction, ScmFileGroup, ScmState } from '../types/protocol';
 
-const GRAPH_COMMITS = 50;
+// The graph starts with this many commits and grows as you scroll.
+const GRAPH_FIRST_PAGE = 50;
+const GRAPH_PAGE = 100;
 
 /** Runs the Source Control sidebar: reads the working tree and carries out actions on it. */
 export class ScmController {
   private repositories: RepositoryInfo[] = [];
   private activeRoot: string | null = null;
+  private graphLimit = GRAPH_FIRST_PAGE;
 
   constructor(
     private readonly storageService: StorageService,
@@ -42,6 +45,7 @@ export class ScmController {
   public async selectRepository(root: string): Promise<void> {
     if (!this.repositories.some((r) => r.rootUri === root)) return;
     this.activeRoot = root;
+    this.graphLimit = GRAPH_FIRST_PAGE;
     await this.storageService.setLastRepository(root);
   }
 
@@ -49,19 +53,40 @@ export class ScmController {
     if (!this.repositories.length) await this.discover();
     const repositories = this.repositories.map((r) => ({ name: r.name, root: r.rootUri }));
     const root = this.activeRoot;
-    if (!root) return { repositories, activeRoot: null, status: null, stashes: [], commits: [], starred: [] };
+    if (!root) return { repositories, activeRoot: null, status: null, stashes: [], commits: [], commitsHasMore: false, starred: [] };
 
     const [status, stashes] = await Promise.all([SourceControlService.getStatus(root), SourceControlService.getStashes(root)]);
-    const commits = await this.getGraphCommits(root, status.head !== null, status.upstream !== null).catch(() => []);
-    return { repositories, activeRoot: root, status, stashes, commits, starred: this.storageService.getStarred(root) };
+    const graph = await this.getGraphCommits(root, status.head !== null, status.upstream !== null).catch(() => ({
+      commits: [],
+      hasMore: false,
+    }));
+    return {
+      repositories,
+      activeRoot: root,
+      status,
+      stashes,
+      commits: graph.commits,
+      commitsHasMore: graph.hasMore,
+      starred: this.storageService.getStarred(root),
+    };
   }
 
   /** Recent commits on this branch and, like VS Code's graph, the ones coming in from its upstream. */
   private async getGraphCommits(root: string, hasHead: boolean, hasUpstream: boolean) {
-    if (!hasHead) return [];
+    if (!hasHead) return { commits: [], hasMore: false };
     const revisions = hasUpstream ? ['HEAD', '@{upstream}'] : ['HEAD'];
-    const res = await GitProcess.exec(['rev-list', '--topo-order', '-n', String(GRAPH_COMMITS), ...revisions, '--'], { cwd: root });
-    return CommitService.getCommitsByHashes(root, res.stdout.split('\n').filter(Boolean));
+    // Ask for one extra to learn whether more exist.
+    const res = await GitProcess.exec(['rev-list', '--topo-order', '-n', String(this.graphLimit + 1), ...revisions, '--'], {
+      cwd: root,
+    });
+    const hashes = res.stdout.split('\n').filter(Boolean);
+    const commits = await CommitService.getCommitsByHashes(root, hashes.slice(0, this.graphLimit));
+    return { commits, hasMore: hashes.length > this.graphLimit };
+  }
+
+  /** Show more of the graph; the next refresh includes them. */
+  public showMoreGraph(): void {
+    this.graphLimit += GRAPH_PAGE;
   }
 
   /** Carry out an action. Returns a message to show, or text to put back in the commit box. */

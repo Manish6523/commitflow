@@ -252,6 +252,7 @@ export interface ScmState {
   status: WorkingTreeStatus | null;
   stashes: StashEntry[];
   commits: GitCommit[];
+  commitsHasMore: boolean;
   starred: string[];
 }
 

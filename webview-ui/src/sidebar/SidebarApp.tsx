@@ -43,7 +43,7 @@ export const SidebarApp: React.FC = () => {
       <div className="scm-body">
         <FileSections status={scm.status} />
         <StashPane stashes={scm.stashes} />
-        <GraphPane commits={scm.commits} starred={scm.starred} />
+        <GraphPane commits={scm.commits} hasMore={scm.commitsHasMore} starred={scm.starred} />
       </div>
     </div>
   );

@@ -47,7 +47,7 @@ type CommitFiles = WorkingFileChange[] | 'loading' | 'failed';
  * Recent history with lanes for merges, like VS Code's Graph. Clicking a commit
  * lists the files it changed underneath; clicking a file opens its diff.
  */
-export const GraphPane: React.FC<{ commits: GitCommit[]; starred: string[] }> = ({ commits, starred }) => {
+export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starred: string[] }> = ({ commits, hasMore, starred }) => {
   const { collapsed, toggleSection, run, openCommit } = useScmStore();
   const open = !collapsed.graph;
   const currentRow = useRef<HTMLDivElement>(null);
@@ -86,6 +86,22 @@ export const GraphPane: React.FC<{ commits: GitCommit[]; starred: string[] }> = 
   );
   const width = LEFT_PAD + totalLanes * LANE_WIDTH;
   const openInDashboard = (hash: string) => vscode.postMessage({ type: 'OPEN_DASHBOARD', hash });
+
+  // Load older commits when the end of the graph scrolls into view, once per page.
+  const endRef = useRef<HTMLDivElement>(null);
+  const requestedAt = useRef(-1);
+  const loadMore = () => {
+    if (!hasMore || requestedAt.current === commits.length) return;
+    requestedAt.current = commits.length;
+    vscode.postMessage({ type: 'SCM_GRAPH_MORE' });
+  };
+  useEffect(() => {
+    const end = endRef.current;
+    if (!end || !hasMore) return;
+    const observer = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMore(), { rootMargin: '200px' });
+    observer.observe(end);
+    return () => observer.disconnect();
+  }, [hasMore, commits.length, open]);
 
   const toggle = (hash: string) => {
     const next = new Set(expanded);
@@ -228,6 +244,11 @@ export const GraphPane: React.FC<{ commits: GitCommit[]; starred: string[] }> = 
               </React.Fragment>
             );
           })}
+          {hasMore && (
+            <div ref={endRef} className="scm-row scm-muted" style={{ paddingLeft: width + 4 }} onClick={loadMore} role="button" tabIndex={0}>
+              {requestedAt.current === commits.length ? <Icon name="loading scm-spin" /> : 'Load more commits'}
+            </div>
+          )}
         </div>
       )}
     </section>

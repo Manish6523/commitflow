@@ -63,6 +63,8 @@ export interface ScmState {
   status: WorkingTreeStatus | null;
   stashes: StashEntry[];
   commits: GitCommit[];
+  /** Whether older commits exist beyond those in the graph. */
+  commitsHasMore: boolean;
   starred: string[];
 }
 
@@ -129,6 +131,7 @@ export type WebviewToExtensionAction =
   | { type: 'SCM_GENERATE_MESSAGE' }
   | { type: 'SCM_FILE_HISTORY'; path: string }
   | { type: 'SCM_COMMIT_FILES'; hash: string }
+  | { type: 'SCM_GRAPH_MORE' }
   | { type: 'SCM_OPEN_COMMIT_FILE'; hash: string; parent: string | null; file: WorkingFileChange }
   | { type: 'OPEN_DASHBOARD'; hash?: string };
 
