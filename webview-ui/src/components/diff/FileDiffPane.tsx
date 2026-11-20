@@ -10,6 +10,7 @@ import {
   Equal,
   Pilcrow,
   Rows2,
+  WrapText,
 } from 'lucide-react';
 import { useCommitStore } from '../../stores/useCommitStore';
 import { DiffSide } from '../../types';
@@ -65,7 +66,7 @@ const NOTICES: Record<Notice, { icon: React.ReactNode; title: string; detail: st
 };
 
 export const FileDiffPane: React.FC<FileDiffPaneProps> = ({ base, target }) => {
-  const { diffLayout, setDiffLayout } = useCommitStore();
+  const { diffLayout, setDiffLayout, diffWordWrap, setDiffWordWrap } = useCommitStore();
   const [diff, setDiff] = useState<LoadedDiff | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
@@ -213,6 +214,15 @@ export const FileDiffPane: React.FC<FileDiffPaneProps> = ({ base, target }) => {
           >
             <Pilcrow className="w-3.5 h-3.5" />
           </button>
+          <button
+            onClick={() => setDiffWordWrap(!diffWordWrap)}
+            className={`${iconButton} ${diffWordWrap ? 'bg-vscode-hover text-vscode-fg' : ''}`}
+            title={diffWordWrap ? 'Stop wrapping long lines' : 'Wrap long lines'}
+            aria-label="Wrap long lines"
+            aria-pressed={diffWordWrap}
+          >
+            <WrapText className="w-3.5 h-3.5" />
+          </button>
 
           <div className="w-px h-4 bg-vscode-border mx-1" />
 
@@ -238,6 +248,7 @@ export const FileDiffPane: React.FC<FileDiffPaneProps> = ({ base, target }) => {
                 {...diff}
                 layout={diffLayout}
                 ignoreWhitespace={ignoreWhitespace}
+                wordWrap={diffWordWrap}
                 onChangeCount={setChangeCount}
               />
             </Suspense>

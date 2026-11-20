@@ -6,6 +6,7 @@ import { SourceControlService, describeGitError, parseStatus } from '../git/Sour
 import { GitProcess, GitProcessError } from '../git/GitProcess';
 import { localCommitMessage } from '../services/AIService';
 import { CommitService } from '../git/CommitService';
+import { DiffService } from '../git/DiffService';
 import { StorageService } from '../services/StorageService';
 import { SearchService } from '../services/SearchService';
 
@@ -441,5 +442,63 @@ describe('starred commits', () => {
     const paged = await SearchService.search(repo, '', { onlyHashes: starred, page: 2, pageSize: 1 });
     expect(paged.commits.map((c) => c.subject)).toEqual(['feat: add alpha']);
     expect(paged.hasMore).toBe(false);
+  });
+});
+
+describe('compare and merge check', () => {
+  async function branchedRepo() {
+    const repo = await newRepo();
+    write(repo, 'shared.txt', 'line 1\nline 2\n');
+    await git(repo, 'add', '.');
+    await git(repo, 'commit', '-q', '-m', 'base');
+    await git(repo, 'checkout', '-q', '-b', 'feature');
+    write(repo, 'feature.txt', 'feature work\n');
+    write(repo, 'shared.txt', 'line 1 from feature\nline 2\n');
+    await git(repo, 'add', '.');
+    await git(repo, 'commit', '-q', '-m', 'feature work');
+    await git(repo, 'checkout', '-q', 'main');
+    write(repo, 'main-only.txt', 'main moved on\n');
+    await git(repo, 'add', '.');
+    await git(repo, 'commit', '-q', '-m', 'main moves on');
+    return repo;
+  }
+
+  it('rejects names that are not commits, including ones shaped like options', async () => {
+    const repo = await newRepo();
+    const out = path.join(repo, 'written.txt');
+    await expect(DiffService.compareCommits(repo, `--output=${out}`, 'HEAD')).rejects.toThrow("isn't a commit, branch or tag");
+    expect(fs.existsSync(out)).toBe(false);
+    await expect(DiffService.compareCommits(repo, 'no-such-branch', 'HEAD')).rejects.toThrow('"no-such-branch"');
+  });
+
+  it('shows only the branch’s own changes in branch mode', async () => {
+    const repo = await branchedRepo();
+
+    const direct = await DiffService.compareCommits(repo, 'main', 'feature');
+    expect(direct.files.map((f) => f.path).sort()).toEqual(['feature.txt', 'main-only.txt', 'shared.txt']);
+
+    const branch = await DiffService.compareCommits(repo, 'main', 'feature', 'branch');
+    expect(branch.files.map((f) => f.path).sort()).toEqual(['feature.txt', 'shared.txt']);
+    expect(branch.baseSubject).toBe('base');
+    expect(branch.targetSubject).toBe('feature work');
+    expect(branch).toMatchObject({ ahead: 1, behind: 1, mode: 'branch' });
+  });
+
+  it('predicts conflicts without touching the repository', async () => {
+    const repo = await branchedRepo();
+    expect(await DiffService.checkMerge(repo, 'main', 'feature')).toMatchObject({ clean: true, conflicts: [] });
+
+    write(repo, 'shared.txt', 'line 1 from main\nline 2\n');
+    await git(repo, 'commit', '-q', '-am', 'main edits the same line');
+    const head = await git(repo, 'rev-parse', 'HEAD');
+
+    const result = await DiffService.checkMerge(repo, 'main', 'feature');
+    expect(result.clean).toBe(false);
+    expect(result.conflicts).toEqual(['shared.txt']);
+    const merged = await git(repo, 'cat-file', 'blob', `${result.tree}:shared.txt`);
+    expect(merged).toContain('<<<<<<<');
+
+    expect(await git(repo, 'rev-parse', 'HEAD')).toBe(head);
+    expect(await git(repo, 'status', '--porcelain')).toBe('');
   });
 });

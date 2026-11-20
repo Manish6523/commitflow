@@ -21,7 +21,9 @@ export class GitProcessError extends Error {
     message: string,
     public readonly args: string[],
     public readonly stderr: string,
-    public readonly exitCode: number
+    public readonly exitCode: number,
+    /** What git printed before failing; some commands report results this way. */
+    public readonly stdout: string = ''
   ) {
     super(message);
     this.name = 'GitProcessError';
@@ -83,7 +85,8 @@ export class GitProcess {
         `Git command failed: git ${args.join(' ')}\n${stderr}`,
         args,
         stderr,
-        exitCode
+        exitCode,
+        stdout
       );
     }
   }

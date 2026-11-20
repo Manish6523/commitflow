@@ -13,7 +13,7 @@ import { AnalyticsService } from '../services/AnalyticsService';
 import { SearchService } from '../services/SearchService';
 import { StorageService } from '../services/StorageService';
 import { AIService } from '../services/AIService';
-import { RepositoryInfo } from '../types/git';
+import { CompareSuggestions, RepositoryInfo } from '../types/git';
 
 export class MessageHandler {
   private activeRepo: RepositoryInfo | null = null;
@@ -169,6 +169,28 @@ export class MessageHandler {
           await vscode.commands.executeCommand('commitflow.internal.commitOpened', message.hash);
           break;
 
+        case 'COMPARE_SUGGEST': {
+          const repo = await this.requireActiveRepo();
+          const suggestions = await this.compareSuggestions(repo.rootUri, message.query);
+          this.postMessage({ type: 'COMPARE_SUGGESTIONS', query: message.query, suggestions, requestId });
+          break;
+        }
+
+        case 'CHECK_MERGE': {
+          const repo = await this.requireActiveRepo();
+          const result = await DiffService.checkMerge(repo.rootUri, message.base, message.target);
+          this.postMessage({ type: 'MERGE_CHECKED', result, requestId });
+          break;
+        }
+
+        case 'OPEN_MERGE_CONFLICT': {
+          // The pretend merge's version of the file, conflict markers and all.
+          const repo = await this.requireActiveRepo();
+          const uri = RevisionContentProvider.toUri(repo.rootUri, message.tree, message.path);
+          await vscode.window.showTextDocument(uri, { preview: true });
+          break;
+        }
+
         case 'GET_STARRED': {
           await this.requireActiveRepo();
           this.postStarred(requestId);
@@ -210,7 +232,8 @@ export class MessageHandler {
           const result = await DiffService.compareCommits(
             this.activeRepo!.rootUri,
             message.baseHash,
-            message.targetHash
+            message.targetHash,
+            message.mode
           );
           this.postMessage({
             type: 'COMPARE_RESULT_LOADED',
@@ -429,6 +452,50 @@ export class MessageHandler {
         requestId,
       });
     }
+  }
+
+  /** Starred commits, branches and tags, and commits matching what's typed, for the Compare picker. */
+  private async compareSuggestions(repoRoot: string, query: string): Promise<CompareSuggestions> {
+    const q = query.trim();
+    const matches = (...texts: string[]) => !q || texts.some((t) => t.toLowerCase().includes(q.toLowerCase()));
+    // A starred commit can vanish, for example after a rebase, so look each one up alone.
+    const starredLookups = this.storageService
+      .getStarred(repoRoot)
+      .map((hash) => CommitService.getCommitsByHashes(repoRoot, [hash]).catch(() => []));
+
+    const [starred, branches, tags, list] = await Promise.all([
+      Promise.all(starredLookups).then((found) => found.flat()),
+      BranchService.getBranches(repoRoot).catch(() => []),
+      TagService.getTags(repoRoot).catch(() => []),
+      (q
+        ? SearchService.search(repoRoot, q, { page: 1, pageSize: 25 })
+        : CommitService.getCommits(repoRoot, { page: 1, pageSize: 25 })
+      ).catch(() => ({ commits: [] })),
+    ]);
+
+    const refs: CompareSuggestions['refs'] = [
+      ...branches
+        // A remote's default-branch pointer shows up as just "origin"; it isn't a branch.
+        .filter((b) => !b.name.endsWith('/HEAD') && !(b.isRemote && !b.name.includes('/')) && matches(b.name))
+        .map((b) => ({
+          name: b.name,
+          kind: b.isRemote ? ('remote' as const) : ('branch' as const),
+          hash: b.lastCommitHash,
+          date: b.lastCommitDate,
+        })),
+      ...tags
+        .filter((t) => matches(t.name))
+        .map((t) => ({ name: t.name, kind: 'tag' as const, hash: t.targetHash, date: t.taggerDate ?? '' })),
+    ].slice(0, 12);
+
+    return {
+      starred: starred
+        .filter((c) => matches(c.subject, c.hash, c.author.name, ...c.branches, ...c.tags))
+        .sort((a, b) => b.author.timestamp - a.author.timestamp)
+        .slice(0, 10),
+      refs,
+      commits: list.commits,
+    };
   }
 
   private async requireActiveRepo(): Promise<RepositoryInfo> {

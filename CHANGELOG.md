@@ -2,6 +2,20 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
+## [0.4.2] - 2026-11-20
+
+### Added
+
+- **Compare picker**: Base and Target open a list of starred commits, branches, tags and recent commits. Type to filter it across your whole history, pick with the mouse or ↑ ↓ and Enter, or still type an ID, branch or `HEAD~1`. Each box shows the message of the commit it points to, and **⇄** swaps the two.
+- **Check for conflicts**: tries merging Target into Base without changing anything, and lists the files that would conflict. Click one to see it with the conflict markers.
+- **Only Target's own changes**: compares from where Target split from Base, so changes made on Base since then are left out. This is what merging Target would bring in.
+- **Wrap long lines** in every diff, from a new button next to the whitespace one.
+
+### Fixed
+
+- Compare showed changes made on Base since the branches split as if Target had removed them. The new option above shows only Target's own changes.
+- A Base or Target name starting with `-` was passed to git as an option. Names are now checked to be real commits first.
+
 ## [0.4.1] - 2026-11-20
 
 ### Added

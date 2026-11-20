@@ -11,6 +11,7 @@ import {
   SavedFilter,
   Tag,
   ViewMode,
+  CompareMode,
 } from '../types';
 import { vscode } from '../vscode';
 import { HistorySelection, WORKING_COPY, pickSide } from '../utils/fileHistory';
@@ -85,6 +86,8 @@ interface CommitStoreState {
   fileHistory: FileHistoryState;
   trackedFiles: string[] | null;
   diffLayout: DiffLayout;
+  /** Wrap long lines in diffs instead of scrolling sideways. */
+  diffWordWrap: boolean;
   pendingConfirm: ConfirmRequest | null;
 
   // Actions
@@ -99,6 +102,7 @@ interface CommitStoreState {
   loadTrackedFiles: () => void;
   resetRepositoryState: () => void;
   setDiffLayout: (layout: DiffLayout) => void;
+  setDiffWordWrap: (wrap: boolean) => void;
   setViewMode: (mode: ViewMode) => void;
   setSearchQuery: (query: string) => void;
   setFilters: (filters: Partial<CommitFilterOptions>) => void;
@@ -112,7 +116,7 @@ interface CommitStoreState {
   toggleStar: (hash: string) => void;
   loadBranchesAndTags: () => void;
   loadAnalytics: () => void;
-  compareCommits: (baseHash: string, targetHash: string) => void;
+  compareCommits: (baseHash: string, targetHash: string, mode?: CompareMode) => void;
   saveCurrentFilter: (name: string) => void;
   deleteSavedFilter: (id: string) => void;
   executeGitOp: (op: 'checkout' | 'cherry-pick' | 'revert' | 'create-branch' | 'create-tag' | 'delete-branch', params: any) => Promise<void>;
@@ -144,6 +148,7 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
   fileHistory: EMPTY_FILE_HISTORY,
   trackedFiles: null,
   diffLayout: vscode.getState<{ diffLayout?: DiffLayout }>()?.diffLayout ?? 'split',
+  diffWordWrap: vscode.getState<{ diffWordWrap?: boolean }>()?.diffWordWrap ?? false,
   pendingConfirm: null,
 
   requestConfirm: (pendingConfirm) => set({ pendingConfirm }),
@@ -226,12 +231,13 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
     vscode.postMessage({ type: 'GET_ANALYTICS' });
   },
 
-  compareCommits: (baseHash: string, targetHash: string) => {
+  compareCommits: (baseHash: string, targetHash: string, mode: CompareMode = 'direct') => {
     set({ comparing: true, compareResult: null });
     vscode.postMessage({
       type: 'COMPARE_COMMITS',
       baseHash,
       targetHash,
+      mode,
     });
   },
 
@@ -354,6 +360,11 @@ export const useCommitStore = create<CommitStoreState>((set, get) => ({
     if (get().viewMode === 'fileHistory') {
       get().loadTrackedFiles();
     }
+  },
+
+  setDiffWordWrap: (diffWordWrap) => {
+    set({ diffWordWrap });
+    vscode.setState({ ...vscode.getState<object>(), diffWordWrap });
   },
 
   setDiffLayout: (diffLayout) => {

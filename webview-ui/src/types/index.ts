@@ -195,14 +195,38 @@ export interface AnalyticsData {
 }
 
 export interface CommitComparisonResult {
+  /** What was asked for, such as "main" or "HEAD~1". */
   baseCommit: string;
   targetCommit: string;
+  /** The commits actually compared. With mode "branch", base is where the two split. */
+  baseHash: string;
+  targetHash: string;
+  baseSubject: string;
+  targetSubject: string;
+  mode: CompareMode;
   ahead: number;
   behind: number;
   files: FileChange[];
   totalInsertions: number;
   totalDeletions: number;
-  diff: string;
+}
+
+/** "direct" compares the two as they are; "branch" shows only Target's own changes since they split. */
+export type CompareMode = 'direct' | 'branch';
+
+/** The result of a pretend merge of Target into Base. */
+export interface MergeCheckResult {
+  clean: boolean;
+  /** The merged tree, whose conflicted files hold conflict markers. */
+  tree: string;
+  conflicts: string[];
+}
+
+/** Something to compare, offered by the Compare page's picker. */
+export interface CompareSuggestions {
+  starred: GitCommit[];
+  refs: { name: string; kind: 'branch' | 'remote' | 'tag'; hash: string; date: string }[];
+  commits: GitCommit[];
 }
 
 

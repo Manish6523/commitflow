@@ -67,7 +67,8 @@ describe('Real Repository Git Integration', () => {
     const comparison = await DiffService.compareCommits(repoRoot, 'HEAD~1', 'HEAD');
     expect(comparison.baseCommit).toBe('HEAD~1');
     expect(comparison.targetCommit).toBe('HEAD');
-    expect(comparison.diff).toBeDefined();
+    expect(comparison.baseHash).toMatch(/^[0-9a-f]{40}$/);
+    expect(comparison.mode).toBe('direct');
   });
 
   it('should calculate repository analytics', async () => {

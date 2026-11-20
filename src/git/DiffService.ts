@@ -1,67 +1,103 @@
-import { GitProcess } from './GitProcess';
-import { CommitComparisonResult, FileChange } from '../types/git';
+import { GitProcess, GitProcessError } from './GitProcess';
+import { CommitComparisonResult, CompareMode, FileChange, MergeCheckResult } from '../types/git';
 import { parseRawNumstatZ } from './parseChanges';
 
 export class DiffService {
   /**
-   * Compare two revisions (commits, branches, or tags).
+   * Find the commit a name refers to, such as a hash, branch, tag or HEAD~1.
+   * The name never reaches git as an option, so "--output=x" is just a bad name.
+   */
+  public static async resolveCommit(repoRoot: string, ref: string): Promise<string> {
+    const name = ref.trim();
+    try {
+      const res = await GitProcess.exec(['rev-parse', '--verify', '--quiet', '--end-of-options', `${name}^{commit}`], {
+        cwd: repoRoot,
+      });
+      const hash = res.stdout.trim();
+      if (/^[0-9a-f]{40,64}$/.test(hash)) return hash;
+    } catch {
+      // Reported below.
+    }
+    throw new Error(`"${name}" isn't a commit, branch or tag in this repository.`);
+  }
+
+  /**
+   * Compare two revisions. "direct" compares them as they are. "branch" shows
+   * only what Target changed since it split from Base, which is what merging
+   * Target into Base would bring in.
    */
   public static async compareCommits(
     repoRoot: string,
     baseCommit: string,
-    targetCommit: string
+    targetCommit: string,
+    mode: CompareMode = 'direct'
   ): Promise<CommitComparisonResult> {
-    // 1. Calculate ahead / behind count
-    let ahead = 0;
-    let behind = 0;
-    try {
-      const countRes = await GitProcess.exec(
-        ['rev-list', '--left-right', '--count', `${baseCommit}...${targetCommit}`],
-        { cwd: repoRoot }
-      );
-      const [behindStr, aheadStr] = countRes.stdout.trim().split(/\s+/);
-      behind = parseInt(behindStr, 10) || 0;
-      ahead = parseInt(aheadStr, 10) || 0;
-    } catch {
-      // Direct commit compare without merge base fallback
+    const run = async (args: string[]) => (await GitProcess.exec(args, { cwd: repoRoot })).stdout;
+    const [base, target] = await Promise.all([
+      this.resolveCommit(repoRoot, baseCommit),
+      this.resolveCommit(repoRoot, targetCommit),
+    ]);
+
+    let from = base;
+    if (mode === 'branch') {
+      from = (await run(['merge-base', base, target]).catch(() => '')).trim();
+      if (!from) throw new Error(`${baseCommit} and ${targetCommit} have no history in common.`);
     }
 
-    // 2. Changed files and numstat between base and target
-    const numstatRes = await GitProcess.exec(
-      ['diff', '--raw', '--numstat', '-z', `${baseCommit}..${targetCommit}`],
-      { cwd: repoRoot }
-    );
-    const files: FileChange[] = parseRawNumstatZ(numstatRes.stdout);
-
-    let totalInsertions = 0;
-    let totalDeletions = 0;
-    for (const f of files) {
-      totalInsertions += f.insertions;
-      totalDeletions += f.deletions;
-    }
-
-    // 3. Diff content (bounded)
-    let diff = '';
-    try {
-      const diffRes = await GitProcess.exec(
-        ['diff', `${baseCommit}..${targetCommit}`],
-        { cwd: repoRoot, maxBuffer: 20 * 1024 * 1024 }
-      );
-      diff = diffRes.stdout;
-    } catch {
-      diff = 'Diff output exceeded maximum buffer.';
-    }
+    const [counts, numstat, subjects] = await Promise.all([
+      run(['rev-list', '--left-right', '--count', `${base}...${target}`]).catch(() => '0 0'),
+      run(['diff', '--raw', '--numstat', '-z', from, target, '--']),
+      run(['log', '--no-walk=unsorted', '--format=%s', from, target, '--']),
+    ]);
+    const [behind, ahead] = counts.trim().split(/\s+/).map((n) => parseInt(n, 10) || 0);
+    const [baseSubject = '', targetSubject = baseSubject] = subjects.split('\n');
+    const files: FileChange[] = parseRawNumstatZ(numstat);
 
     return {
       baseCommit,
       targetCommit,
+      baseHash: from,
+      targetHash: target,
+      baseSubject,
+      targetSubject: from === target ? baseSubject : targetSubject,
+      mode,
       ahead,
       behind,
       files,
-      totalInsertions,
-      totalDeletions,
-      diff,
+      totalInsertions: files.reduce((sum, f) => sum + f.insertions, 0),
+      totalDeletions: files.reduce((sum, f) => sum + f.deletions, 0),
     };
+  }
+
+  /**
+   * Try merging Target into Base without touching the working tree, index or
+   * any branch, and report the files that would conflict.
+   */
+  public static async checkMerge(repoRoot: string, baseCommit: string, targetCommit: string): Promise<MergeCheckResult> {
+    const [base, target] = await Promise.all([
+      this.resolveCommit(repoRoot, baseCommit),
+      this.resolveCommit(repoRoot, targetCommit),
+    ]);
+    const args = ['merge-tree', '--write-tree', '--name-only', '--no-messages', '-z', base, target];
+    let output: string;
+    let clean = true;
+    try {
+      output = (await GitProcess.exec(args, { cwd: repoRoot })).stdout;
+    } catch (err) {
+      // Exit status 1 means the merge has conflicts; anything else is a real failure.
+      if (err instanceof GitProcessError && err.exitCode === 1 && err.stdout) {
+        output = err.stdout;
+        clean = false;
+      } else if (err instanceof GitProcessError && /refusing to merge unrelated histories/i.test(err.stderr)) {
+        throw new Error(`${baseCommit} and ${targetCommit} have no history in common, so they can't be merged.`);
+      } else {
+        throw err;
+      }
+    }
+    const [tree, ...rest] = output.split('\0');
+    const end = rest.indexOf('');
+    const conflicts = clean ? [] : [...new Set(rest.slice(0, end === -1 ? rest.length : end))];
+    return { clean, tree: tree.trim(), conflicts };
   }
 
   /**
