@@ -2,8 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ScmFileGroup, WorkingFileChange, WorkingTreeStatus } from '../types';
 import { fileKey, useScmStore } from './scmStore';
 import { FolderNode, TreeNode, buildTree, fileName, folderOf, sortByPath } from './changeTree';
-import { fileIcon } from './fileIcons';
-import { Icon, IconButton, SectionHeader } from './bits';
+import { FileTypeIcon, Icon, IconButton, SectionHeader } from './bits';
 
 type Row =
   | { kind: 'file'; key: string; group: ScmFileGroup; file: WorkingFileChange; depth: number }
@@ -183,7 +182,6 @@ const FileRow: React.FC<{
   actions: React.ReactNode;
 }> = ({ row, showDir, selected, contextFiles, onSelect, onOpen, onToggleStage, actions }) => {
   const { file, group } = row;
-  const icon = fileIcon(file.path);
   const dir = folderOf(file.path);
   const color = decor(file.status);
   // Read by VS Code to build the native right-click menu for this row.
@@ -226,7 +224,7 @@ const FileRow: React.FC<{
         }
       }}
     >
-      <Icon name={icon.icon} style={{ color: icon.color }} />
+      <FileTypeIcon path={file.path} />
       <span className="scm-name scm-truncate" style={{ color, flexShrink: 0, maxWidth: showDir ? '70%' : undefined, flex: showDir ? undefined : 1 }}>
         {fileName(file.path)}
       </span>

@@ -27,9 +27,11 @@ export function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(
     sidebarProvider,
-    vscode.window.registerWebviewViewProvider(SidebarWebviewViewProvider.viewType, sidebarProvider, {
-      webviewOptions: { retainContextWhenHidden: true },
-    })
+    ...[SidebarWebviewViewProvider.changesView, SidebarWebviewViewProvider.graphView].map((view) =>
+      vscode.window.registerWebviewViewProvider(view, sidebarProvider, {
+        webviewOptions: { retainContextWhenHidden: true },
+      })
+    )
   );
 
   context.subscriptions.push(
@@ -100,6 +102,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('commitflow.internal.commitOpened', (hash: string | null) =>
       sidebarProvider.setOpenCommit(hash ?? null)
     ),
+    vscode.commands.registerCommand('commitflow.graph.goToCurrent', () => sidebarProvider.revealHead()),
     vscode.commands.registerCommand('commitflow.graph.copyHash', async (context?: { hash?: string }) => {
       if (context?.hash) await vscode.env.clipboard.writeText(context.hash);
     }),

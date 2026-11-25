@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { StorageService } from '../services/StorageService';
 import { AIService } from '../services/AIService';
+import { IconThemeService } from '../services/IconThemeService';
 import { Security } from '../webview/Security';
 import { ExtensionMessage, ScmAction, ScmFileGroup, WebviewMessage } from '../types/protocol';
 import { WorkingFileChange } from '../types/git';
@@ -21,11 +22,18 @@ export interface FileMenuContext {
 
 export type FileCommand = 'openChanges' | 'openFile' | 'stage' | 'unstage' | 'discard' | 'fileHistory' | 'copyPath' | 'reveal';
 
-/** The CommitFlow activity bar view: a Source Control panel with a commit graph. */
+/**
+ * The CommitFlow activity bar views: Changes, which is Source Control, and Graph
+ * below it. They're separate views so VS Code lets people resize and collapse them.
+ */
 export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
-  public static readonly viewType = 'commitflow.sidebar';
+  public static readonly changesView = 'commitflow.sidebar';
+  public static readonly graphView = 'commitflow.graph';
 
-  private view?: vscode.WebviewView;
+  private readonly views = new Map<string, vscode.WebviewView>();
+  private readonly iconTheme = new IconThemeService();
+  /** Files whose icons the views have, to send again when the theme changes. */
+  private readonly iconPaths = new Set<string>();
   private readonly controller: ScmController;
   private readonly disposables: vscode.Disposable[] = [];
   private refreshTimer?: NodeJS.Timeout;
@@ -45,6 +53,8 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
     const schedule = () => this.scheduleRefresh();
     this.disposables.push(
       { dispose: stopListening },
+      this.iconTheme,
+      this.iconTheme.onDidChange(() => this.sendAllIcons()),
       watcher,
       watcher.onDidChange(schedule),
       watcher.onDidCreate(schedule),
@@ -64,17 +74,27 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
-    this.view = webviewView;
+    this.views.set(webviewView.viewType, webviewView);
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
     };
-    webviewView.webview.html = this.getHtml(webviewView.webview);
+    webviewView.webview.html = this.getHtml(webviewView.webview, webviewView.viewType);
 
-    this.disposables.push(
-      webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => this.handleMessage(message)),
-      webviewView.onDidChangeVisibility(() => webviewView.visible && this.scheduleRefresh())
-    );
+    const listeners = [
+      webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => this.handleMessage(message, webviewView)),
+      webviewView.onDidChangeVisibility(() => webviewView.visible && this.scheduleRefresh()),
+    ];
+    webviewView.onDidDispose(() => {
+      listeners.forEach((l) => l.dispose());
+      if (this.views.get(webviewView.viewType) === webviewView) this.views.delete(webviewView.viewType);
+    });
+  }
+
+  /** Scroll the graph to the commit that's checked out. */
+  public async revealHead(): Promise<void> {
+    await this.refresh();
+    this.post({ type: 'SCM_REVEAL_HEAD' });
   }
 
   /** Reload the working tree and history, now. */
@@ -86,12 +106,15 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
     this.refreshing = true;
     try {
       const state = await this.controller.getState();
+      const { status } = state;
+      if (status) {
+        this.sendIcons([...status.conflicts, ...status.staged, ...status.unstaged].map((f) => f.path));
+      }
       this.post({ type: 'SCM_STATE', state });
-      if (this.view) {
+      const changes = this.views.get(SidebarWebviewViewProvider.changesView);
+      if (changes) {
         const count = ScmController.countChanges(state);
-        this.view.badge = count ? { value: count, tooltip: `${count} pending change${count === 1 ? '' : 's'}` } : undefined;
-        const status = state.status;
-        this.view.description = status ? status.branch ?? (status.head ? `detached at ${status.head}` : undefined) : undefined;
+        changes.badge = count ? { value: count, tooltip: `${count} pending change${count === 1 ? '' : 's'}` } : undefined;
       }
     } catch {
       // A repository being rewritten mid-refresh can fail one read; the next event retries.
@@ -161,7 +184,7 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
   private async perform(action: ScmAction) {
     try {
       const result = await vscode.window.withProgress(
-        { location: { viewId: SidebarWebviewViewProvider.viewType } },
+        { location: { viewId: SidebarWebviewViewProvider.changesView } },
         () => this.controller.run(action)
       );
       if (result?.message) vscode.window.setStatusBarMessage(`$(check) ${result.message}`, 4000);
@@ -171,14 +194,35 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
     }
   }
 
-  private async handleMessage(message: WebviewMessage): Promise<void> {
+  private sendIcons(paths: string[]): void {
+    const added = paths.filter((p) => !this.iconPaths.has(p));
+    if (!added.length) return;
+    added.forEach((p) => this.iconPaths.add(p));
+    this.post({ type: 'SCM_ICONS', icons: this.iconTheme.icons(added) });
+  }
+
+  /** Send every icon again, to one view that just opened or to all of them. */
+  private sendAllIcons(view?: vscode.WebviewView): void {
+    const message: ExtensionMessage = {
+      type: 'SCM_ICONS',
+      icons: this.iconTheme.icons(this.iconPaths),
+      fonts: this.iconTheme.fonts(),
+      reset: true,
+    };
+    if (view) view.webview.postMessage(message);
+    else this.post(message);
+  }
+
+  private async handleMessage(message: WebviewMessage, view: vscode.WebviewView): Promise<void> {
     const requestId = message.id;
+    const reply = (response: ExtensionMessage) => view.webview.postMessage(response);
     try {
       switch (message.type) {
         case 'WEBVIEW_READY':
         case 'SCM_GET_STATE':
+          this.sendAllIcons(view);
           await this.refresh();
-          this.post({ type: 'SCM_OPEN_COMMIT', hash: this.openCommit });
+          reply({ type: 'SCM_OPEN_COMMIT', hash: this.openCommit });
           break;
 
         case 'SCM_SELECT_REPOSITORY':
@@ -188,7 +232,7 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
 
         case 'SCM_ACTION': {
           const result = await this.perform(message.action);
-          this.post({ type: 'SCM_ACTION_DONE', ...result, requestId });
+          reply({ type: 'SCM_ACTION_DONE', ...result, requestId });
           break;
         }
 
@@ -198,17 +242,18 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
 
         case 'SCM_GENERATE_MESSAGE': {
           const result = await vscode.window.withProgress(
-            { location: { viewId: SidebarWebviewViewProvider.viewType } },
+            { location: { viewId: SidebarWebviewViewProvider.changesView } },
             () => this.controller.generateCommitMessage()
           );
           if (result.warning) vscode.window.showWarningMessage(result.warning);
-          this.post({ type: 'COMMIT_MESSAGE_GENERATED', ...result, requestId });
+          reply({ type: 'COMMIT_MESSAGE_GENERATED', ...result, requestId });
           break;
         }
 
         case 'SCM_COMMIT_FILES': {
           const files = await this.controller.getCommitFiles(message.hash);
-          this.post({ type: 'SCM_COMMIT_FILES_LOADED', hash: message.hash, files, requestId });
+          this.sendIcons(files.map((f) => f.path));
+          reply({ type: 'SCM_COMMIT_FILES_LOADED', hash: message.hash, files, requestId });
           break;
         }
 
@@ -241,15 +286,15 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
       if (message.type === 'SCM_ACTION' || message.type === 'SCM_GENERATE_MESSAGE') {
         vscode.window.showErrorMessage(err.message);
       }
-      this.post({ type: 'ERROR', message: err.message ?? 'Something went wrong.', requestId });
+      reply({ type: 'ERROR', message: err.message ?? 'Something went wrong.', requestId });
     }
   }
 
   private post(message: ExtensionMessage): void {
-    this.view?.webview.postMessage(message);
+    this.views.forEach((view) => view.webview.postMessage(message));
   }
 
-  private getHtml(webview: vscode.Webview): string {
+  private getHtml(webview: vscode.Webview, viewType: string): string {
     const distPath = path.join(this.extensionUri.fsPath, 'dist', 'webview');
     const indexHtmlPath = path.join(distPath, 'index.html');
     if (!fs.existsSync(indexHtmlPath)) {
@@ -267,6 +312,6 @@ export class SidebarWebviewViewProvider implements vscode.WebviewViewProvider, v
       .replace(/<script /g, `<script nonce="${nonce}" `)
       .replace(/crossorigin/g, '')
       .replace('<head>', `<head>\n    <meta http-equiv="Content-Security-Policy" content="${csp}">`)
-      .replace(/<body([^>]*)>/, '<body$1 data-view="sidebar">');
+      .replace(/<body([^>]*)>/, `<body$1 data-view="sidebar" data-pane="${viewType === SidebarWebviewViewProvider.graphView ? 'graph' : 'changes'}">`);
   }
 }

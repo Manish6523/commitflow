@@ -1,9 +1,30 @@
 import React, { useEffect, useRef } from 'react';
+import { fileIcon } from './fileIcons';
+import { iconFontName, useScmStore } from './scmStore';
 
 /** A VS Code codicon. `name` may carry extra classes, like "sync scm-spin". */
 export const Icon: React.FC<{ name: string; style?: React.CSSProperties }> = ({ name, style }) => {
   const [icon, ...extra] = name.split(' ');
   return <span className={`codicon codicon-${icon} ${extra.join(' ')}`} style={style} aria-hidden="true" />;
+};
+
+/** A file's icon from the editor's icon theme, or a built-in one if the theme has none. */
+export const FileTypeIcon: React.FC<{ path: string }> = ({ path }) => {
+  const icon = useScmStore((s) => s.icons[path]);
+  if (icon?.image) return <img className="scm-file-icon" src={icon.image} alt="" draggable={false} />;
+  if (icon?.character) {
+    return (
+      <span
+        className="scm-file-icon"
+        style={{ fontFamily: `"${iconFontName(icon.font ?? '')}"`, color: icon.color, fontSize: icon.size }}
+        aria-hidden="true"
+      >
+        {icon.character}
+      </span>
+    );
+  }
+  const builtIn = fileIcon(path);
+  return <Icon name={builtIn.icon} style={{ color: builtIn.color }} />;
 };
 
 export const IconButton: React.FC<{

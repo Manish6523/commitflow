@@ -8,6 +8,9 @@ export class StorageService {
   /** Starred commits, as full hashes, for each repository root. Kept across workspaces. */
   private static readonly STARRED_KEY = 'commitflow.starredCommits';
 
+  /** The star being saved. Each save rewrites the list, so they run one at a time. */
+  private starSave: Promise<unknown> = Promise.resolve();
+
   private readonly starListeners = new Set<(repoRoot: string) => void>();
 
   constructor(
@@ -58,7 +61,13 @@ export class StorageService {
   }
 
   /** Star or unstar a commit, and tell every view. Returns the new list. */
-  public async toggleStar(repoRoot: string, hash: string): Promise<string[]> {
+  public toggleStar(repoRoot: string, hash: string): Promise<string[]> {
+    const save = this.starSave.then(() => this.saveToggledStar(repoRoot, hash));
+    this.starSave = save.catch(() => undefined);
+    return save;
+  }
+
+  private async saveToggledStar(repoRoot: string, hash: string): Promise<string[]> {
     const all = this.globalState.get<Record<string, string[]>>(StorageService.STARRED_KEY, {});
     const current = all[repoRoot] ?? [];
     const next = current.includes(hash) ? current.filter((h) => h !== hash) : [...current, hash];

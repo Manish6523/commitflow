@@ -56,6 +56,20 @@ export interface AnalyticsData {
   activityHeatmap: { date: string; count: number; level: 0 | 1 | 2 | 3 | 4 }[];
 }
 
+/** A file's icon from the active icon theme: an image, or a character in one of its fonts. */
+export interface FileIcon {
+  image?: string;
+  character?: string;
+  color?: string;
+  font?: string;
+  size?: string;
+}
+
+export interface IconFont {
+  id: string;
+  src: string;
+}
+
 /** Everything the Source Control sidebar shows. */
 export interface ScmState {
   repositories: { name: string; root: string }[];
@@ -145,6 +159,9 @@ export type ExtensionToWebviewAction =
   | { type: 'ADJACENT_COMMITS'; hash: string; older: string | null; newer: string | null }
   | { type: 'STARRED_LOADED'; hashes: string[] }
   | { type: 'SCM_OPEN_COMMIT'; hash: string | null }
+  /** Icons for file paths. `reset` replaces all earlier ones, after a theme change. */
+  | { type: 'SCM_ICONS'; icons: Record<string, FileIcon>; fonts?: IconFont[]; reset?: boolean }
+  | { type: 'SCM_REVEAL_HEAD' }
   | { type: 'SCM_COMMIT_FILES_LOADED'; hash: string; files: WorkingFileChange[] }
   | { type: 'DIFF_LOADED'; hash: string; diff: string; filePath?: string }
   | { type: 'COMPARE_RESULT_LOADED'; result: CommitComparisonResult }

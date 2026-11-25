@@ -2,6 +2,19 @@
 
 All notable changes to the "commitflow" extension will be documented in this file.
 
+## [0.5.1] - 2026-11-25
+
+### Added
+
+- Files in the sidebar show the icons of your own file icon theme, and follow it when you change it.
+- **Graph** is its own panel under **Changes**. Drag the line between them to resize, or collapse it to the bottom. VS Code remembers both.
+- The Graph title bar has Go to Current Commit, Fetch, Pull, Push and Refresh, with the same icons as VS Code's.
+
+### Fixed
+
+- Starring several commits quickly kept only one of them.
+- With incoming commits, the graph could mark one of them as your current commit. Your real current commit is now marked, in bold.
+
 ## [0.5.0] - 2026-11-20
 
 ### Changed

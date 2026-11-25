@@ -420,6 +420,20 @@ describe('starred commits', () => {
     expect(changed).toHaveLength(4);
   });
 
+  it('keeps every star when several are clicked before the first is saved', async () => {
+    const data = new Map<string, unknown>();
+    const slow = {
+      get: (key: string, fallback?: unknown) => data.get(key) ?? fallback,
+      update: (key: string, value: unknown) =>
+        new Promise<void>((resolve) => setTimeout(() => resolve(void data.set(key, value)), 5)),
+      keys: () => [...data.keys()],
+    } as any;
+    const storage = new StorageService(memento(), slow);
+
+    await Promise.all(['h1', 'h2', 'h3', 'h4'].map((hash) => storage.toggleStar('/repo', hash)));
+    expect(storage.getStarred('/repo')).toEqual(['h1', 'h2', 'h3', 'h4']);
+  });
+
   it('limits listing and search to starred commits', async () => {
     const repo = await newRepo();
     const hashes: string[] = [];

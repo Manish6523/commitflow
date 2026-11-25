@@ -245,6 +245,15 @@ export interface RefSummary {
 }
 
 
+/** A file's icon from the active icon theme: an image, or a character in one of its fonts. */
+export interface FileIcon {
+  image?: string;
+  character?: string;
+  color?: string;
+  font?: string;
+  size?: string;
+}
+
 /** Everything the Source Control sidebar shows. Mirrors ScmState in the extension. */
 export interface ScmState {
   repositories: { name: string; root: string }[];

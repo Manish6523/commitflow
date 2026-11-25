@@ -53,7 +53,8 @@ Click the **CommitFlow** icon in the Activity Bar.
 - Select several files with `Ctrl` or `Shift` and act on all of them.
 - **Sync**, **Publish Branch** and branch switching from the branch name at the top.
 - **Stashes**: apply, pop or drop.
-- **Graph** of your branch and incoming commits. Click a commit to list its files, and click a file to see its change. Older commits load as you scroll.
+- **Graph** of your branch and incoming commits, in its own panel you can resize or collapse. Click a commit to list its files, and click a file to see its change. Older commits load as you scroll.
+- Files show the icons of **your own icon theme**.
 - The change count shows on the icon, and everything refreshes on its own.
 
   </td>

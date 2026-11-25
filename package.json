@@ -2,7 +2,7 @@
   "name": "commitflow-vscode",
   "displayName": "CommitFlow",
   "description": "Visual Git commit history, interactive graph, side-by-side diff viewer, file history, branch manager and commit explorer.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "commitflow",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -64,8 +64,15 @@
       "commitflow-activitybar": [
         {
           "id": "commitflow.sidebar",
-          "name": "Source Control",
-          "type": "webview"
+          "name": "Changes",
+          "type": "webview",
+          "initialSize": 3
+        },
+        {
+          "id": "commitflow.graph",
+          "name": "Graph",
+          "type": "webview",
+          "initialSize": 2
         }
       ]
     },
@@ -157,22 +164,26 @@
       {
         "command": "commitflow.scm.pull",
         "title": "Pull",
-        "category": "CommitFlow"
+        "category": "CommitFlow",
+        "icon": "$(repo-pull)"
       },
       {
         "command": "commitflow.scm.push",
         "title": "Push",
-        "category": "CommitFlow"
+        "category": "CommitFlow",
+        "icon": "$(repo-push)"
       },
       {
         "command": "commitflow.scm.sync",
         "title": "Sync",
-        "category": "CommitFlow"
+        "category": "CommitFlow",
+        "icon": "$(sync)"
       },
       {
         "command": "commitflow.scm.fetch",
         "title": "Fetch",
-        "category": "CommitFlow"
+        "category": "CommitFlow",
+        "icon": "$(git-fetch)"
       },
       {
         "command": "commitflow.scm.undoLastCommit",
@@ -283,6 +294,12 @@
         "command": "commitflow.graph.revert",
         "title": "Revert Commit",
         "category": "CommitFlow"
+      },
+      {
+        "command": "commitflow.graph.goToCurrent",
+        "title": "Go to Current Commit",
+        "category": "CommitFlow",
+        "icon": "$(target)"
       }
     ],
     "menus": {
@@ -356,6 +373,51 @@
           "command": "commitflow.scm.switchBranch",
           "when": "view == commitflow.sidebar",
           "group": "5_branch@1"
+        },
+        {
+          "command": "commitflow.graph.goToCurrent",
+          "when": "view == commitflow.graph",
+          "group": "navigation@1"
+        },
+        {
+          "command": "commitflow.scm.fetch",
+          "when": "view == commitflow.graph",
+          "group": "navigation@2"
+        },
+        {
+          "command": "commitflow.scm.pull",
+          "when": "view == commitflow.graph",
+          "group": "navigation@3"
+        },
+        {
+          "command": "commitflow.scm.push",
+          "when": "view == commitflow.graph",
+          "group": "navigation@4"
+        },
+        {
+          "command": "commitflow.refresh",
+          "when": "view == commitflow.graph",
+          "group": "navigation@5"
+        },
+        {
+          "command": "commitflow.openDashboard",
+          "when": "view == commitflow.graph",
+          "group": "1_open@1"
+        },
+        {
+          "command": "commitflow.scm.sync",
+          "when": "view == commitflow.graph",
+          "group": "2_sync@1"
+        },
+        {
+          "command": "commitflow.scm.undoLastCommit",
+          "when": "view == commitflow.graph",
+          "group": "2_sync@2"
+        },
+        {
+          "command": "commitflow.scm.switchBranch",
+          "when": "view == commitflow.graph",
+          "group": "3_branch@1"
         }
       ],
       "editor/title": [
@@ -476,6 +538,10 @@
         {
           "command": "commitflow.graph.revert",
           "when": "false"
+        },
+        {
+          "command": "commitflow.graph.goToCurrent",
+          "when": "false"
         }
       ],
       "webview/context": [
@@ -521,32 +587,32 @@
         },
         {
           "command": "commitflow.graph.open",
-          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "when": "webviewId == 'commitflow.graph' && webviewSection =~ /^(commit)$/",
           "group": "navigation@1"
         },
         {
           "command": "commitflow.graph.copyHash",
-          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "when": "webviewId == 'commitflow.graph' && webviewSection =~ /^(commit)$/",
           "group": "1_copy@1"
         },
         {
           "command": "commitflow.graph.checkout",
-          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "when": "webviewId == 'commitflow.graph' && webviewSection =~ /^(commit)$/",
           "group": "2_branch@1"
         },
         {
           "command": "commitflow.graph.createBranch",
-          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "when": "webviewId == 'commitflow.graph' && webviewSection =~ /^(commit)$/",
           "group": "2_branch@2"
         },
         {
           "command": "commitflow.graph.cherryPick",
-          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "when": "webviewId == 'commitflow.graph' && webviewSection =~ /^(commit)$/",
           "group": "3_change@1"
         },
         {
           "command": "commitflow.graph.revert",
-          "when": "webviewId == 'commitflow.sidebar' && webviewSection =~ /^(commit)$/",
+          "when": "webviewId == 'commitflow.graph' && webviewSection =~ /^(commit)$/",
           "group": "3_change@2"
         }
       ]

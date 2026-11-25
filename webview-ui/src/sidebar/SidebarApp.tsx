@@ -8,7 +8,10 @@ import { FileSections } from './FileSections';
 import { GraphPane, StashPane } from './Panes';
 import { Icon } from './bits';
 
-/** The CommitFlow activity bar view: Source Control plus a commit graph. */
+// Changes and Graph are two views in VS Code, each running this app for its own part.
+const isGraph = document.body.dataset.pane === 'graph';
+
+/** A CommitFlow activity bar view: Changes, or the commit graph below it. */
 export const SidebarApp: React.FC = () => {
   const scm = useScmStore((s) => s.scm);
 
@@ -37,13 +40,22 @@ export const SidebarApp: React.FC = () => {
     );
   }
 
+  if (isGraph) {
+    return (
+      <div className="scm">
+        <div className="scm-body" role="tree" aria-label="Commit graph">
+          <GraphPane commits={scm.commits} hasMore={scm.commitsHasMore} starred={scm.starred} head={scm.status.head} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="scm">
       <CommitArea />
       <div className="scm-body">
         <FileSections status={scm.status} />
         <StashPane stashes={scm.stashes} />
-        <GraphPane commits={scm.commits} hasMore={scm.commitsHasMore} starred={scm.starred} />
       </div>
     </div>
   );

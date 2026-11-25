@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { vscode } from '../vscode';
-import { ScmAction, ScmFileGroup, ScmState, WorkingFileChange } from '../types';
+import { FileIcon, ScmAction, ScmFileGroup, ScmState, WorkingFileChange } from '../types';
 
 // Pulls and pushes wait on the network, and commit hooks can be slow.
 const ACTION_TIMEOUT_MS = 10 * 60 * 1000;
@@ -18,6 +18,10 @@ interface ScmStore extends Saved {
   scm: ScmState | null;
   /** The commit open in the dashboard, highlighted in the graph. */
   openCommit: string | null;
+  /** Icon theme icons by file path; files without one use the built-in icons. */
+  icons: Record<string, FileIcon>;
+  /** Goes up each time the graph should scroll to the checked-out commit. */
+  revealHead: number;
   /** The action in progress, so its button can show it's working. */
   busy: ScmAction['kind'] | null;
   generating: boolean;
@@ -50,6 +54,8 @@ export const useScmStore = create<ScmStore>((set, get) => {
   return {
     scm: null,
     openCommit: null,
+    icons: {},
+    revealHead: 0,
     busy: null,
     generating: false,
     selection: [],
@@ -148,8 +154,27 @@ export const useScmStore = create<ScmStore>((set, get) => {
   };
 });
 
+/** Load the icon theme's fonts under names that can't clash with the sidebar's own. */
+function loadFonts(fonts: { id: string; src: string }[]): void {
+  for (const { id, src } of fonts) {
+    const face = new FontFace(iconFontName(id), `url(${src})`);
+    face.load().then(
+      () => document.fonts.add(face),
+      () => undefined
+    );
+  }
+}
+
+export const iconFontName = (id: string) => `cf-icons-${id.replace(/[^\w-]/g, '_')}`;
+
 // The extension pushes fresh state whenever the repository changes.
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'SCM_STATE') useScmStore.getState().receive(event.data.state);
+  if (event.data?.type === 'SCM_ICONS') {
+    const { icons, fonts, reset } = event.data;
+    if (fonts) loadFonts(fonts);
+    useScmStore.setState((state) => ({ icons: reset ? icons : { ...state.icons, ...icons } }));
+  }
+  if (event.data?.type === 'SCM_REVEAL_HEAD') useScmStore.setState((state) => ({ revealHead: state.revealHead + 1 }));
   if (event.data?.type === 'SCM_OPEN_COMMIT') useScmStore.setState({ openCommit: event.data.hash });
 });

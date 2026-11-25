@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GitCommit, StashEntry, WorkingFileChange } from '../types';
 import { fileName, folderOf, sortByPath } from './changeTree';
-import { fileIcon } from './fileIcons';
 import { vscode } from '../vscode';
 import { timeAgo } from '../utils/fileHistory';
 import { LANE_COLORS, edgePath, layoutGraph } from '../utils/graphLayout';
 import { useScmStore } from './scmStore';
-import { Icon, IconButton, SectionHeader } from './bits';
+import { FileTypeIcon, Icon, IconButton, SectionHeader } from './bits';
 
 const ROW_HEIGHT = 22;
 const LANE_WIDTH = 12;
@@ -47,14 +46,26 @@ type CommitFiles = WorkingFileChange[] | 'loading' | 'failed';
  * Recent history with lanes for merges, like VS Code's Graph. Clicking a commit
  * lists the files it changed underneath; clicking a file opens its diff.
  */
-export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starred: string[] }> = ({ commits, hasMore, starred }) => {
-  const { collapsed, toggleSection, run, openCommit } = useScmStore();
-  const open = !collapsed.graph;
-  const currentRow = useRef<HTMLDivElement>(null);
+export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starred: string[]; head: string | null }> = ({
+  commits,
+  hasMore,
+  starred,
+  head,
+}) => {
+  const { openCommit, revealHead } = useScmStore();
+  const headRow = useRef<HTMLDivElement | null>(null);
+  // "Go to Current Commit" in the view's title bar.
+  useEffect(() => {
+    if (!revealHead) return;
+    headRow.current?.scrollIntoView({ block: 'center' });
+    headRow.current?.focus({ preventScroll: true });
+  }, [revealHead]);
+  const isHeadCommit = (commit: GitCommit) => head !== null && commit.hash.startsWith(head);
+  const currentRow = useRef<HTMLDivElement | null>(null);
   // Bring the commit open in the dashboard into view.
   useEffect(() => {
     currentRow.current?.scrollIntoView({ block: 'nearest' });
-  }, [openCommit, open]);
+  }, [openCommit]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [files, setFiles] = useState<Record<string, CommitFiles>>({});
 
@@ -101,7 +112,7 @@ export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starr
     const observer = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMore(), { rootMargin: '200px' });
     observer.observe(end);
     return () => observer.disconnect();
-  }, [hasMore, commits.length, open]);
+  }, [hasMore, commits.length]);
 
   const toggle = (hash: string) => {
     const next = new Set(expanded);
@@ -125,12 +136,8 @@ export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starr
 
   return (
     <section>
-      <SectionHeader pane title="Graph" open={open} onToggle={() => toggleSection('graph')}>
-        <IconButton icon="repo-fetch" label="Fetch" onClick={() => run({ kind: 'fetch' })} />
-        <IconButton icon="graph" label="Open CommitFlow Dashboard" onClick={() => vscode.postMessage({ type: 'OPEN_DASHBOARD' })} />
-      </SectionHeader>
-      {open && commits.length === 0 && <div className="scm-empty">No commits yet</div>}
-      {open && commits.length > 0 && (
+      {commits.length === 0 && <div className="scm-empty">No commits yet</div>}
+      {commits.length > 0 && (
         <div style={{ position: 'relative' }}>
           <svg width={width} height={totalHeight} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} aria-hidden="true">
             {nodes.map((node) =>
@@ -138,15 +145,15 @@ export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starr
                 <path key={`${node.commit.hash}-${i}`} d={edgePath(node, parent)} fill="none" stroke={LANE_COLORS[node.lane % LANE_COLORS.length]} strokeWidth={1.5} />
               ))
             )}
-            {nodes.map((node, i) => (
+            {nodes.map((node) => (
               <circle
                 key={node.commit.hash}
                 cx={node.x}
                 cy={node.y}
-                r={i === 0 ? 4 : 3.5}
-                fill={i === 0 ? 'var(--vscode-sideBar-background)' : LANE_COLORS[node.lane % LANE_COLORS.length]}
+                r={isHeadCommit(node.commit) ? 4 : 3.5}
+                fill={isHeadCommit(node.commit) ? 'var(--vscode-sideBar-background)' : LANE_COLORS[node.lane % LANE_COLORS.length]}
                 stroke={LANE_COLORS[node.lane % LANE_COLORS.length]}
-                strokeWidth={i === 0 ? 2 : 0}
+                strokeWidth={isHeadCommit(node.commit) ? 2 : 0}
               />
             ))}
           </svg>
@@ -154,12 +161,16 @@ export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starr
             const isOpen = expanded.has(commit.hash);
             const isStarred = starred.includes(commit.hash);
             const isCurrent = commit.hash === openCommit;
+            const isHead = isHeadCommit(commit);
             const list = files[commit.hash];
             const laneX = LEFT_PAD + lane * LANE_WIDTH;
             return (
               <React.Fragment key={commit.hash}>
                 <div
-                  ref={isCurrent ? currentRow : undefined}
+                  ref={(row) => {
+                    if (isCurrent) currentRow.current = row;
+                    if (isHead) headRow.current = row;
+                  }}
                   aria-current={isCurrent || undefined}
                   className={`scm-row scm-commit${isOpen ? ' is-open' : ''}${isStarred ? ' is-starred' : ''}${isCurrent ? ' is-current' : ''}`}
                   role="treeitem"
@@ -177,7 +188,7 @@ export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starr
                     }
                   }}
                 >
-                  <span className="scm-truncate" style={{ flex: '1 1 60%', minWidth: 48 }}>
+                  <span className="scm-truncate" style={{ flex: '1 1 60%', minWidth: 48, fontWeight: isHead ? 600 : undefined }}>
                     {isStarred && <Icon name="star-full" style={{ fontSize: 12, color: '#f5b301', marginRight: 4, verticalAlign: -1 }} />}
                     {commit.subject}
                   </span>
@@ -217,7 +228,6 @@ export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starr
                 {isOpen &&
                   Array.isArray(list) &&
                   sortByPath(list).map((file) => {
-                    const icon = fileIcon(file.path);
                     const color = `var(--decor-${file.status})`;
                     return (
                       <div
@@ -230,7 +240,7 @@ export const GraphPane: React.FC<{ commits: GitCommit[]; hasMore: boolean; starr
                         onClick={() => openFile(commit, file)}
                         onKeyDown={(e) => e.key === 'Enter' && openFile(commit, file)}
                       >
-                        <Icon name={icon.icon} style={{ color: icon.color }} />
+                        <FileTypeIcon path={file.path} />
                         <span className="scm-name scm-truncate" style={{ color, flexShrink: 0, maxWidth: '65%' }}>
                           {fileName(file.path)}
                         </span>
